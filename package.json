@@ -1,0 +1,31 @@
+{
+  "name": "dairy-analyzer-chrome-extension",
+  "version": "1.0.0",
+  "description": "A beautiful Chrome extension for visualizing Google Calendar diary entries in a clean timeline format",
+  "main": "popup.js",
+  "scripts": {
+    "icon-guide": "node convert-icons.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": [
+    "chrome-extension",
+    "google-calendar",
+    "timeline",
+    "diary",
+    "visualization",
+    "productivity"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "sharp": "^0.32.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "your-repository-url"
+  },
+  "bugs": {
+    "url": "your-repository-url/issues"
+  },
+  "homepage": "your-repository-url#readme"
+} 

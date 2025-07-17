@@ -1,0 +1,52 @@
+# Sensitive Configuration Files
+manifest.json
+private/
+*.secret
+*.key
+*.env
+
+# OAuth and API Keys
+*client_secret*
+*api_key*
+*oauth*
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Chrome Extension Packaging
+*.crx
+*.pem
+web-store-upload.zip
+
+# Development Files
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+
+# Temporary Files
+tmp/
+temp/
+.tmp/
+
+# Debug Files
+debug.log
+console.log
+
+# Extension Store Assets
+store-assets/
+screenshots-internal/
+
+# Backup Files
+*.backup
+*.bak
+*.orig 
