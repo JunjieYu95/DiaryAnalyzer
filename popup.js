@@ -58,7 +58,7 @@ async function checkAuthStatus() {
         const result = await chrome.storage.local.get(['accessToken']);
         console.log('Stored token check:', !!result.accessToken);
         console.log('Stored token type:', typeof result.accessToken);
-        
+
         if (result.accessToken && typeof result.accessToken === 'string') {
             accessToken = result.accessToken;
             console.log('Using stored token');
@@ -79,12 +79,12 @@ async function authenticateUser() {
     try {
         console.log('Starting authentication...');
         console.log('Using Client ID from manifest.json');
-        const token = await chrome.identity.getAuthToken({interactive: true});
+        const token = await chrome.identity.getAuthToken({ interactive: true });
         console.log('Raw token response:', token);
         console.log('Token type:', typeof token);
-        
+
         let actualToken = null;
-        
+
         // Handle different token response formats
         if (typeof token === 'string') {
             // Old format: token is a string
@@ -102,14 +102,14 @@ async function authenticateUser() {
                 throw new Error(`Unexpected token format: ${JSON.stringify(token)}`);
             }
         }
-        
+
         console.log('Actual token length:', actualToken ? actualToken.length : 'N/A');
         console.log('Token starts with:', actualToken ? actualToken.substring(0, 20) : 'N/A');
         console.log('Token received:', actualToken ? 'SUCCESS' : 'FAILED');
-        
+
         if (actualToken && typeof actualToken === 'string' && actualToken.length > 0) {
             accessToken = actualToken;
-            await chrome.storage.local.set({accessToken: actualToken});
+            await chrome.storage.local.set({ accessToken: actualToken });
             console.log('Token stored successfully');
             showSection('loading');
             await loadCalendarData();
@@ -120,7 +120,7 @@ async function authenticateUser() {
         console.error('Authentication error details:', error);
         console.error('Error message:', error.message);
         console.error('Error stack:', error.stack);
-        
+
         // More specific error messages
         if (error.message.includes('OAuth2')) {
             showError('OAuth2 configuration error. Check your Client ID in manifest.json');
@@ -139,12 +139,12 @@ async function loadCalendarData() {
         console.log('Access token exists:', !!accessToken);
         console.log('Access token type:', typeof accessToken);
         console.log('Token preview:', typeof accessToken === 'string' ? accessToken.substring(0, 20) + '...' : accessToken);
-        
+
         // Validate token
         if (!accessToken || typeof accessToken !== 'string') {
             throw new Error('Invalid access token. Please re-authenticate.');
         }
-        
+
         // First, get list of all calendars
         console.log('Fetching calendar list...');
         const calendarListResponse = await fetch(
@@ -163,32 +163,32 @@ async function loadCalendarData() {
 
         const calendarList = await calendarListResponse.json();
         console.log('Available calendars:', calendarList.items?.map(cal => cal.summary));
-        
+
         // Filter for relevant calendars (primary + diary calendars)
-        const relevantCalendars = calendarList.items?.filter(calendar => 
-            calendar.id === 'primary' || 
+        const relevantCalendars = calendarList.items?.filter(calendar =>
+            calendar.id === 'primary' ||
             calendar.summary?.toLowerCase().includes('diary') ||
             calendar.summary?.toLowerCase().includes('actual')
         ) || [];
-        
+
         console.log('Relevant calendars:', relevantCalendars.map(cal => cal.summary));
-        
+
         const timeMin = getDateRangeStart();
         const timeMax = getDateRangeEnd();
-        
+
         // Fetch events from all relevant calendars
         allEvents = [];
-        
+
         for (const calendar of relevantCalendars) {
             console.log(`Fetching events from: ${calendar.summary}`);
-            
+
             const apiUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events?` +
                 `timeMin=${timeMin.toISOString()}&` +
                 `timeMax=${timeMax.toISOString()}&` +
                 `singleEvents=true&` +
                 `orderBy=startTime&` +
                 `maxResults=2500`;
-                
+
             const response = await fetch(apiUrl, {
                 headers: {
                     'Authorization': `Bearer ${accessToken}`,
@@ -200,27 +200,27 @@ async function loadCalendarData() {
                 const data = await response.json();
                 const events = data.items || [];
                 console.log(`Found ${events.length} events in ${calendar.summary}`);
-                
+
                 // Add calendar name to each event for reference
                 events.forEach(event => {
                     event.calendarName = calendar.summary;
                 });
-                
+
                 allEvents = allEvents.concat(events);
             } else {
                 console.warn(`Failed to fetch events from ${calendar.summary}: ${response.status}`);
             }
         }
-        
+
         // Sort all events by start time
         allEvents.sort((a, b) => {
             const aTime = new Date(a.start.dateTime || a.start.date);
             const bTime = new Date(b.start.dateTime || b.start.date);
             return aTime - bTime;
         });
-        
+
         console.log(`Total events loaded: ${allEvents.length}`);
-        
+
         // Debug timezone information
         const now = new Date();
         console.log('Current local time:', now.toLocaleString());
@@ -228,7 +228,7 @@ async function loadCalendarData() {
         console.log('User timezone offset (minutes):', now.getTimezoneOffset());
         console.log('Date range start:', getDateRangeStart().toLocaleString());
         console.log('Date range end:', getDateRangeEnd().toLocaleString());
-        
+
         displayCurrentView();
         updateStats();
         showSection('content');
@@ -238,11 +238,11 @@ async function loadCalendarData() {
             console.log('401 error - token might be expired, trying to refresh...');
             // Try to get a fresh token
             try {
-                const newToken = await chrome.identity.getAuthToken({interactive: false});
+                const newToken = await chrome.identity.getAuthToken({ interactive: false });
                 if (newToken && newToken !== accessToken) {
                     console.log('Got fresh token, retrying...');
                     accessToken = newToken;
-                    await chrome.storage.local.set({accessToken: newToken});
+                    await chrome.storage.local.set({ accessToken: newToken });
                     // Retry the API call
                     await loadCalendarData();
                     return;
@@ -250,7 +250,7 @@ async function loadCalendarData() {
             } catch (refreshError) {
                 console.log('Token refresh failed:', refreshError);
             }
-            
+
             // If refresh failed, clear token and re-authenticate
             await chrome.storage.local.remove(['accessToken']);
             accessToken = null;
@@ -266,7 +266,7 @@ async function loadCalendarData() {
 function getDateRangeStart() {
     const date = new Date(currentDate);
     const range = dateRange.value;
-    
+
     switch (range) {
         case 'today':
             date.setHours(0, 0, 0, 0);
@@ -282,7 +282,7 @@ function getDateRangeStart() {
             date.setHours(0, 0, 0, 0);
             break;
     }
-    
+
     return date;
 }
 
@@ -290,7 +290,7 @@ function getDateRangeStart() {
 function getDateRangeEnd() {
     const date = new Date(currentDate);
     const range = dateRange.value;
-    
+
     switch (range) {
         case 'today':
             date.setHours(23, 59, 59, 999);
@@ -307,7 +307,7 @@ function getDateRangeEnd() {
             date.setHours(23, 59, 59, 999);
             break;
     }
-    
+
     return date;
 }
 
@@ -315,22 +315,22 @@ function getDateRangeEnd() {
 function displayTimeline() {
     const dayStart = new Date(currentDate);
     dayStart.setHours(0, 0, 0, 0);
-    
+
     const dayEnd = new Date(currentDate);
     dayEnd.setHours(23, 59, 59, 999);
-    
+
     const dayEvents = allEvents.filter(event => {
         const eventDate = new Date(event.start.dateTime || event.start.date);
         return eventDate >= dayStart && eventDate <= dayEnd;
     });
-    
+
     timeline.innerHTML = '';
-    
+
     if (dayEvents.length === 0) {
         timeline.innerHTML = '<div class="no-events">No events found for this date</div>';
         return;
     }
-    
+
     dayEvents.forEach(event => {
         const timelineItem = createTimelineItem(event);
         timeline.appendChild(timelineItem);
@@ -341,16 +341,16 @@ function displayTimeline() {
 function createTimelineItem(event) {
     const item = document.createElement('div');
     item.className = 'timeline-item';
-    
+
     const startTime = new Date(event.start.dateTime || event.start.date);
     const endTime = new Date(event.end.dateTime || event.end.date);
-    
-    const timeStr = event.start.dateTime ? 
-        `${formatTime(startTime)} - ${formatTime(endTime)}` : 
+
+    const timeStr = event.start.dateTime ?
+        `${formatTime(startTime)} - ${formatTime(endTime)}` :
         'All day';
-    
+
     const category = categorizeEvent(event.summary);
-    
+
     item.innerHTML = `
         <div class="timeline-time">${timeStr}</div>
         <div class="timeline-title">${event.summary || 'No title'}</div>
@@ -358,14 +358,14 @@ function createTimelineItem(event) {
         <div class="event-category category-${category}">${category}</div>
         ${event.calendarName ? `<div class="calendar-source">📅 ${event.calendarName}</div>` : ''}
     `;
-    
+
     return item;
 }
 
 // Display distribution analysis
 function displayDistribution() {
     const range = dateRange.value;
-    
+
     if (range === 'today') {
         displayDailyDistribution();
     } else {
@@ -377,21 +377,21 @@ function displayDistribution() {
 function displayDailyDistribution() {
     const dayStart = new Date(currentDate);
     dayStart.setHours(0, 0, 0, 0);
-    
+
     const dayEnd = new Date(currentDate);
     dayEnd.setHours(23, 59, 59, 999);
-    
+
     const dayEvents = allEvents.filter(event => {
         const eventDate = new Date(event.start.dateTime || event.start.date);
         return eventDate >= dayStart && eventDate <= dayEnd;
     });
-    
+
     // Calculate time distribution by calendar
     const calendarDistribution = calculateCalendarTimeDistribution(dayEvents);
-    
+
     // Display chart
     displayDistributionChart(calendarDistribution);
-    
+
     // Display stats
     displayDistributionStats(calendarDistribution);
 }
@@ -401,17 +401,17 @@ function displayStackedDistribution() {
     const range = dateRange.value;
     const startDate = getDateRangeStart();
     const endDate = getDateRangeEnd();
-    
+
     // Group events by date
     const eventsByDate = groupEventsByDate(allEvents, startDate, endDate);
-    
+
     // Update header
     const subtitle = document.querySelector('.distribution-subtitle');
     subtitle.textContent = range === 'week' ? 'Weekly time distribution' : 'Monthly time distribution';
-    
+
     // Display stacked chart
     displayStackedChart(eventsByDate);
-    
+
     // Display aggregated stats
     displayAggregatedStats(eventsByDate);
 }
@@ -419,7 +419,7 @@ function displayStackedDistribution() {
 // Group events by date for stacked visualization
 function groupEventsByDate(events, startDate, endDate) {
     const eventsByDate = {};
-    
+
     // Initialize all dates in range using local timezone
     const currentDate = new Date(startDate);
     while (currentDate <= endDate) {
@@ -435,77 +435,77 @@ function groupEventsByDate(events, startDate, endDate) {
         };
         currentDate.setDate(currentDate.getDate() + 1);
     }
-    
+
     // Group events by date and calculate time per calendar type
     events.forEach(event => {
         if (event.start.dateTime && event.end.dateTime) {
             const eventDate = new Date(event.start.dateTime);
             const dateKey = getLocalDateKey(eventDate);
-            
+
             if (eventsByDate[dateKey]) {
                 const start = new Date(event.start.dateTime);
                 const end = new Date(event.end.dateTime);
                 const duration = (end - start) / (1000 * 60); // minutes
-                
+
                 const calendarKey = getCalendarKey(event.calendarName);
                 eventsByDate[dateKey][calendarKey] += duration;
                 eventsByDate[dateKey].total += duration;
             }
         }
     });
-    
+
     return eventsByDate;
 }
 
 // Display stacked chart
 function displayStackedChart(eventsByDate) {
     distributionChart.innerHTML = '';
-    
+
     const dates = Object.keys(eventsByDate).sort();
-    
+
     if (dates.length === 0) {
         distributionChart.innerHTML = '<div class="no-events">No events found in this date range</div>';
         return;
     }
-    
+
     // Find max total time for scaling
     const maxTotal = Math.max(...Object.values(eventsByDate).map(day => day.total));
-    
+
     if (maxTotal === 0) {
         distributionChart.innerHTML = '<div class="no-events">No timed events found in this date range</div>';
         return;
     }
-    
+
     dates.forEach(dateKey => {
         const dayData = eventsByDate[dateKey];
-        
+
         const dayElement = document.createElement('div');
         dayElement.className = 'stacked-day';
-        
+
         const totalHours = Math.floor(dayData.total / 60);
         const totalMinutes = Math.floor(dayData.total % 60);
         const totalTimeStr = totalHours > 0 ? `${totalHours}h ${totalMinutes}m` : `${totalMinutes}m`;
-        
+
         // Calculate percentages for stacking with better visibility
         const maxBarHeight = 180; // Reserve 20px for spacing at top
         const prodHeight = maxTotal > 0 ? Math.max((dayData.prod / maxTotal) * maxBarHeight, dayData.prod > 0 ? 8 : 0) : 0;
         const nonprodHeight = maxTotal > 0 ? Math.max((dayData.nonprod / maxTotal) * maxBarHeight, dayData.nonprod > 0 ? 8 : 0) : 0;
         const adminHeight = maxTotal > 0 ? Math.max((dayData.admin / maxTotal) * maxBarHeight, dayData.admin > 0 ? 8 : 0) : 0;
         const otherHeight = maxTotal > 0 ? Math.max((dayData.other / maxTotal) * maxBarHeight, dayData.other > 0 ? 8 : 0) : 0;
-        
+
         dayElement.innerHTML = `
             <div class="stacked-bar-container">
                 <div class="stacked-bar">
-                    ${dayData.prod > 0 ? `<div class="stack-segment bar-prod" style="height: ${prodHeight}px" title="Production: ${Math.floor(dayData.prod/60)}h ${Math.floor(dayData.prod%60)}m"></div>` : ''}
-                    ${dayData.nonprod > 0 ? `<div class="stack-segment bar-nonprod" style="height: ${nonprodHeight}px" title="Non-Production: ${Math.floor(dayData.nonprod/60)}h ${Math.floor(dayData.nonprod%60)}m"></div>` : ''}
-                    ${dayData.admin > 0 ? `<div class="stack-segment bar-admin" style="height: ${adminHeight}px" title="Admin & Rest: ${Math.floor(dayData.admin/60)}h ${Math.floor(dayData.admin%60)}m"></div>` : ''}
-                    ${dayData.other > 0 ? `<div class="stack-segment bar-other" style="height: ${otherHeight}px" title="Other: ${Math.floor(dayData.other/60)}h ${Math.floor(dayData.other%60)}m"></div>` : ''}
+                    ${dayData.prod > 0 ? `<div class="stack-segment bar-prod" style="height: ${prodHeight}px" title="Production: ${Math.floor(dayData.prod / 60)}h ${Math.floor(dayData.prod % 60)}m"></div>` : ''}
+                    ${dayData.nonprod > 0 ? `<div class="stack-segment bar-nonprod" style="height: ${nonprodHeight}px" title="Non-Production: ${Math.floor(dayData.nonprod / 60)}h ${Math.floor(dayData.nonprod % 60)}m"></div>` : ''}
+                    ${dayData.admin > 0 ? `<div class="stack-segment bar-admin" style="height: ${adminHeight}px" title="Admin & Rest: ${Math.floor(dayData.admin / 60)}h ${Math.floor(dayData.admin % 60)}m"></div>` : ''}
+                    ${dayData.other > 0 ? `<div class="stack-segment bar-other" style="height: ${otherHeight}px" title="Other: ${Math.floor(dayData.other / 60)}h ${Math.floor(dayData.other % 60)}m"></div>` : ''}
                 </div>
                 <div class="stacked-time">${totalTimeStr}</div>
             </div>
             <div class="stacked-date">${dayData.displayDate}</div>
         `;
-        
+
         distributionChart.appendChild(dayElement);
     });
 }
@@ -513,7 +513,7 @@ function displayStackedChart(eventsByDate) {
 // Display aggregated statistics for date range
 function displayAggregatedStats(eventsByDate) {
     distributionStats.innerHTML = '';
-    
+
     // Calculate totals across all dates
     const totals = {
         prod: 0,
@@ -522,7 +522,7 @@ function displayAggregatedStats(eventsByDate) {
         other: 0,
         total: 0
     };
-    
+
     Object.values(eventsByDate).forEach(day => {
         totals.prod += day.prod;
         totals.nonprod += day.nonprod;
@@ -530,14 +530,14 @@ function displayAggregatedStats(eventsByDate) {
         totals.other += day.other;
         totals.total += day.total;
     });
-    
+
     // Total time stat
     const totalHours = Math.floor(totals.total / 60);
     const totalMinutes = Math.floor(totals.total % 60);
-    const totalTimeStr = totalHours > 0 ? 
-        `${totalHours}h ${totalMinutes}m` : 
+    const totalTimeStr = totalHours > 0 ?
+        `${totalHours}h ${totalMinutes}m` :
         `${totalMinutes}m`;
-    
+
     const totalStat = document.createElement('div');
     totalStat.className = 'distribution-stat';
     totalStat.innerHTML = `
@@ -545,20 +545,20 @@ function displayAggregatedStats(eventsByDate) {
         <span class="distribution-stat-value">${totalTimeStr}</span>
     `;
     distributionStats.appendChild(totalStat);
-    
+
     // Individual category stats
     const categories = [
         { key: 'prod', name: 'Production' },
         { key: 'nonprod', name: 'Non-Production' },
         { key: 'admin', name: 'Admin & Rest' }
     ];
-    
+
     categories.forEach(category => {
         if (totals[category.key] > 0) {
             const hours = Math.floor(totals[category.key] / 60);
             const minutes = Math.floor(totals[category.key] % 60);
             const timeStr = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-            
+
             const stat = document.createElement('div');
             stat.className = 'distribution-stat';
             stat.innerHTML = `
@@ -574,15 +574,15 @@ function displayAggregatedStats(eventsByDate) {
 function calculateCalendarTimeDistribution(events) {
     const distribution = {};
     let totalMinutes = 0;
-    
+
     events.forEach(event => {
         if (event.start.dateTime && event.end.dateTime) {
             const start = new Date(event.start.dateTime);
             const end = new Date(event.end.dateTime);
             const duration = (end - start) / (1000 * 60); // minutes
-            
+
             const calendarKey = getCalendarKey(event.calendarName);
-            
+
             if (!distribution[calendarKey]) {
                 distribution[calendarKey] = {
                     name: calendarKey,
@@ -592,27 +592,27 @@ function calculateCalendarTimeDistribution(events) {
                     color: getCalendarColor(calendarKey)
                 };
             }
-            
+
             distribution[calendarKey].minutes += duration;
             distribution[calendarKey].events += 1;
             totalMinutes += duration;
         }
     });
-    
+
     // Calculate percentages
     Object.values(distribution).forEach(calendar => {
         calendar.percentage = totalMinutes > 0 ? (calendar.minutes / totalMinutes) * 100 : 0;
         calendar.hours = Math.floor(calendar.minutes / 60);
         calendar.remainingMinutes = Math.floor(calendar.minutes % 60);
     });
-    
+
     return { distribution, totalMinutes };
 }
 
 // Get calendar key for grouping
 function getCalendarKey(calendarName) {
     if (!calendarName) return 'other';
-    
+
     const name = calendarName.toLowerCase();
     if (name.includes('prod') && !name.includes('nonprod')) return 'prod';
     if (name.includes('nonprod')) return 'nonprod';
@@ -635,7 +635,7 @@ function getCalendarDisplayName(key) {
 function getCalendarColor(key) {
     const colors = {
         'prod': 'bar-prod',
-        'nonprod': 'bar-nonprod', 
+        'nonprod': 'bar-nonprod',
         'admin': 'bar-admin',
         'other': 'bar-other'
     };
@@ -645,27 +645,27 @@ function getCalendarColor(key) {
 // Display distribution chart
 function displayDistributionChart(calendarData) {
     const { distribution, totalMinutes } = calendarData;
-    
+
     distributionChart.innerHTML = '';
-    
+
     if (totalMinutes === 0) {
         distributionChart.innerHTML = '<div class="no-events">No timed events found for this date</div>';
         return;
     }
-    
+
     // Sort by time spent (descending)
     const sortedCalendars = Object.values(distribution).sort((a, b) => b.minutes - a.minutes);
-    
+
     sortedCalendars.forEach(calendar => {
         const barElement = document.createElement('div');
         barElement.className = 'calendar-bar';
-        
-        const timeStr = calendar.hours > 0 ? 
-            `${calendar.hours}h ${calendar.remainingMinutes}m` : 
+
+        const timeStr = calendar.hours > 0 ?
+            `${calendar.hours}h ${calendar.remainingMinutes}m` :
             `${calendar.remainingMinutes}m`;
-            
+
         const minWidth = calendar.percentage > 0 ? Math.max(calendar.percentage, 5) : 0; // Minimum 5% width for visibility
-        
+
         barElement.innerHTML = `
             <div class="calendar-label">${calendar.displayName}</div>
             <div class="calendar-bar-container">
@@ -673,7 +673,7 @@ function displayDistributionChart(calendarData) {
             </div>
             <div class="calendar-time">${timeStr}</div>
         `;
-        
+
         distributionChart.appendChild(barElement);
     });
 }
@@ -681,16 +681,16 @@ function displayDistributionChart(calendarData) {
 // Display distribution statistics
 function displayDistributionStats(calendarData) {
     const { distribution, totalMinutes } = calendarData;
-    
+
     distributionStats.innerHTML = '';
-    
+
     // Total time stat
     const totalHours = Math.floor(totalMinutes / 60);
     const totalRemainingMinutes = Math.floor(totalMinutes % 60);
-    const totalTimeStr = totalHours > 0 ? 
-        `${totalHours}h ${totalRemainingMinutes}m` : 
+    const totalTimeStr = totalHours > 0 ?
+        `${totalHours}h ${totalRemainingMinutes}m` :
         `${totalRemainingMinutes}m`;
-    
+
     const totalStat = document.createElement('div');
     totalStat.className = 'distribution-stat';
     totalStat.innerHTML = `
@@ -698,18 +698,18 @@ function displayDistributionStats(calendarData) {
         <span class="distribution-stat-value">${totalTimeStr}</span>
     `;
     distributionStats.appendChild(totalStat);
-    
+
     // Individual calendar stats
     const sortedCalendars = Object.values(distribution).sort((a, b) => b.minutes - a.minutes);
-    
+
     sortedCalendars.slice(0, 3).forEach(calendar => { // Show top 3
         const stat = document.createElement('div');
         stat.className = 'distribution-stat';
-        
-        const timeStr = calendar.hours > 0 ? 
-            `${calendar.hours}h ${calendar.remainingMinutes}m` : 
+
+        const timeStr = calendar.hours > 0 ?
+            `${calendar.hours}h ${calendar.remainingMinutes}m` :
             `${calendar.remainingMinutes}m`;
-            
+
         stat.innerHTML = `
             <span class="distribution-stat-label">${calendar.displayName}</span>
             <span class="distribution-stat-value">${timeStr}</span>
@@ -721,9 +721,9 @@ function displayDistributionStats(calendarData) {
 // Categorize event based on title
 function categorizeEvent(title) {
     if (!title) return 'other';
-    
+
     const titleLower = title.toLowerCase();
-    
+
     if (titleLower.includes('meeting') || titleLower.includes('call') || titleLower.includes('interview')) {
         return 'meeting';
     }
@@ -739,14 +739,14 @@ function categorizeEvent(title) {
     if (titleLower.includes('shower') || titleLower.includes('walk') || titleLower.includes('personal') || titleLower.includes('exercise')) {
         return 'personal';
     }
-    
+
     return 'other';
 }
 
 // Format time for display
 function formatTime(date) {
-    return date.toLocaleTimeString([], { 
-        hour: '2-digit', 
+    return date.toLocaleTimeString([], {
+        hour: '2-digit',
         minute: '2-digit',
         hour12: false
     });
@@ -756,18 +756,18 @@ function formatTime(date) {
 function updateStats() {
     const dayStart = new Date(currentDate);
     dayStart.setHours(0, 0, 0, 0);
-    
+
     const dayEnd = new Date(currentDate);
     dayEnd.setHours(23, 59, 59, 999);
-    
+
     const dayEvents = allEvents.filter(event => {
         const eventDate = new Date(event.start.dateTime || event.start.date);
         return eventDate >= dayStart && eventDate <= dayEnd;
     });
-    
+
     // Total events
     totalEventsSpan.textContent = dayEvents.length;
-    
+
     // Active hours calculation
     let totalMinutes = 0;
     dayEvents.forEach(event => {
@@ -777,27 +777,27 @@ function updateStats() {
             totalMinutes += (end - start) / (1000 * 60);
         }
     });
-    
+
     const hours = Math.floor(totalMinutes / 60);
     const minutes = Math.floor(totalMinutes % 60);
     activeHoursSpan.textContent = `${hours}h ${minutes}m`;
-    
+
     // Most common activity
     const categories = {};
     dayEvents.forEach(event => {
         const category = categorizeEvent(event.summary);
         categories[category] = (categories[category] || 0) + 1;
     });
-    
+
     const categoryEntries = Object.entries(categories);
     let mostCommon = null;
-    
+
     if (categoryEntries.length > 0) {
-        mostCommon = categoryEntries.reduce((a, b) => 
+        mostCommon = categoryEntries.reduce((a, b) =>
             categories[a[0]] > categories[b[0]] ? a : b
         );
     }
-    
+
     mostCommonSpan.textContent = mostCommon ? mostCommon[0] : '-';
 }
 
@@ -820,7 +820,7 @@ function navigateDate(direction) {
 
     currentDate = newDate;
     updateCurrentDateDisplay();
-    
+
     // Reload data for new date range
     if (accessToken) {
         showSection('loading');
@@ -830,14 +830,29 @@ function navigateDate(direction) {
 
 // Update current date display
 function updateCurrentDateDisplay() {
-    currentDateSpan.textContent = currentDate.toLocaleDateString([], {
-        weekday: 'long',
-        month: 'short',
-        day: 'numeric'
-    });
-    
+    const range = dateRange.value;
+    let displayString = '';
+
+    if (range === 'today') {
+        displayString = currentDate.toLocaleDateString([], {
+            weekday: 'long',
+            month: 'short',
+            day: 'numeric'
+        });
+    } else {
+        const startDate = getDateRangeStart();
+        const endDate = getDateRangeEnd();
+
+        const startStr = startDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        const endStr = endDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+        displayString = `${startStr} - ${endStr}`;
+    }
+
+    currentDateSpan.textContent = displayString;
+
     // Debug: log current date info
-    console.log('Current date display:', currentDate.toLocaleDateString());
+    console.log('Current date display:', displayString);
     console.log('Current date key:', getLocalDateKey(currentDate));
 }
 
@@ -857,7 +872,7 @@ function onViewModeChange() {
 // Display current view based on selected mode
 function displayCurrentView() {
     const selectedView = viewMode.value;
-    
+
     if (selectedView === 'timeline') {
         timelineContainer.classList.remove('hidden');
         distributionContainer.classList.add('hidden');
@@ -885,7 +900,7 @@ function showSection(section) {
     loadingSection.classList.add('hidden');
     contentSection.classList.add('hidden');
     errorSection.classList.add('hidden');
-    
+
     switch (section) {
         case 'auth':
             authSection.classList.remove('hidden');
