@@ -803,8 +803,21 @@ function updateStats() {
 
 // Navigate to previous/next date
 function navigateDate(direction) {
+    const range = dateRange.value;
     const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() + direction);
+
+    switch (range) {
+        case 'today':
+            newDate.setDate(newDate.getDate() + direction);
+            break;
+        case 'week':
+            newDate.setDate(newDate.getDate() + 7 * direction);
+            break;
+        case 'month':
+            newDate.setMonth(newDate.getMonth() + direction);
+            break;
+    }
+
     currentDate = newDate;
     updateCurrentDateDisplay();
     
