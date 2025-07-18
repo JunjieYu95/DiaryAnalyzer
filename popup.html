@@ -11,16 +11,7 @@
         <header class="header">
             <h1>📊 Dairy Analyzer</h1>
             <div class="controls">
-                <select id="dateRange" class="date-selector">
-                    <option value="today">Today</option>
-                    <option value="week">This Week</option>
-                    <option value="month">This Month</option>
-                </select>
-                <select id="viewMode" class="view-selector">
-                    <option value="timeline">Timeline</option>
-                    <option value="distribution">Distribution</option>
-                </select>
-                <button id="refreshBtn" class="refresh-btn">🔄</button>
+                <button id="zoomOutBtn" class="zoom-btn">↗️ Open Full View</button>
             </div>
         </header>
 
@@ -33,53 +24,11 @@
 
         <div id="loadingSection" class="loading-section hidden">
             <div class="loading-spinner"></div>
-            <p>Loading your diary...</p>
+            <p>Loading...</p>
         </div>
 
-        <div id="contentSection" class="content-section hidden">
-            <div class="date-navigation">
-                <button id="prevDay" class="nav-btn">‹</button>
-                <span id="currentDate" class="current-date"></span>
-                <button id="nextDay" class="nav-btn">›</button>
-            </div>
-
-            <div id="timelineContainer" class="timeline-container">
-                <div id="timeline" class="timeline"></div>
-            </div>
-
-            <div id="distributionContainer" class="distribution-container hidden">
-                <div class="distribution-header">
-                    <h3>Time Distribution by Calendar</h3>
-                    <p class="distribution-subtitle">How you spent your time today</p>
-                </div>
-                <div id="distributionChart" class="distribution-chart"></div>
-                <div id="distributionStats" class="distribution-stats"></div>
-            </div>
-
-            <div class="stats-container">
-                <div class="stat-card">
-                    <span class="stat-label">Total Events</span>
-                    <span id="totalEvents" class="stat-value">0</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">Active Hours</span>
-                    <span id="activeHours" class="stat-value">0h</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">Most Common</span>
-                    <span id="mostCommon" class="stat-value">-</span>
-                </div>
-            </div>
-        </div>
-
-        <div id="errorSection" class="error-section hidden">
-            <div class="error-content">
-                <p id="errorMessage">Something went wrong</p>
-                <button id="retryBtn" class="retry-btn">Try Again</button>
-            </div>
-        </div>
     </div>
 
     <script src="popup.js"></script>
 </body>
-</html> 
+</html>

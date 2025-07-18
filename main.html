@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dairy Analyzer - Full View</title>
+    <link rel="stylesheet" href="popup.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>📊 Dairy Analyzer</h1>
+            <div class="controls">
+                <select id="dateRange" class="date-selector">
+                    <option value="today">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                </select>
+                <select id="viewMode" class="view-selector">
+                    <option value="timeline">Timeline</option>
+                    <option value="distribution">Distribution</option>
+                    <option value="advanced">Advanced</option>
+                </select>
+                <button id="refreshBtn" class="refresh-btn">🔄</button>
+            </div>
+        </header>
+
+        <div id="authSection" class="auth-section">
+            <div class="auth-content">
+                <p>Connect to Google Calendar to view your diary</p>
+                <button id="authBtn" class="auth-btn">Connect Calendar</button>
+            </div>
+        </div>
+
+        <div id="loadingSection" class="loading-section hidden">
+            <div class="loading-spinner"></div>
+            <p>Loading your diary...</p>
+        </div>
+
+        <div id="contentSection" class="content-section hidden">
+            <div class="date-navigation">
+                <button id="prevDay" class="nav-btn">‹</button>
+                <span id="currentDate" class="current-date"></span>
+                <button id="nextDay" class="nav-btn">›</button>
+            </div>
+
+            <div id="timelineContainer" class="timeline-container">
+                <div id="timeline" class="timeline"></div>
+            </div>
+
+            <div id="distributionContainer" class="distribution-container hidden">
+                <div class="distribution-header">
+                    <h3>Time Distribution by Calendar</h3>
+                    <p class="distribution-subtitle">How you spent your time today</p>
+                </div>
+                <div id="distributionChart" class="distribution-chart"></div>
+                <div id="distributionStats" class="distribution-stats"></div>
+            </div>
+
+            <div id="advancedContainer" class="advanced-container hidden">
+                <div class="advanced-header">
+                    <h3>Advanced Analytics</h3>
+                </div>
+                <div id="advancedCharts" class="advanced-charts">
+                    <canvas id="timeSeriesChart"></canvas>
+                    <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+
+            <div class="stats-container">
+                <div class="stat-card">
+                    <span class="stat-label">Total Events</span>
+                    <span id="totalEvents" class="stat-value">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Active Hours</span>
+                    <span id="activeHours" class="stat-value">0h</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Most Common</span>
+                    <span id="mostCommon" class="stat-value">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="errorSection" class="error-section hidden">
+            <div class="error-content">
+                <p id="errorMessage">Something went wrong</p>
+                <button id="retryBtn" class="retry-btn">Try Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>
