@@ -96,9 +96,9 @@ Ideal for productivity analysis:
 
 **Today**: Horizontal bars showing time allocation
 - Production Work (Green)
-- Non-Production (Blue)  
+- Non-Production (Gray)  
 - Admin & Rest (Orange)
-- Other Activities (Gray)
+- Other Activities (Light Gray)
 
 **Week/Month**: Stacked bar charts
 - X-axis: Dates

@@ -409,7 +409,13 @@ function displayStackedDistribution() {
     const subtitle = document.querySelector('.distribution-subtitle');
     subtitle.textContent = range === 'week' ? 'Weekly time distribution' : 'Monthly time distribution';
 
-    // Display stacked chart
+    // Calculate overall period distribution
+    const overallDistribution = calculateOverallDistribution(eventsByDate);
+
+    // Display overall distribution summary first
+    displayOverallDistributionSummary(overallDistribution, range);
+
+    // Display daily stacked chart
     displayStackedChart(eventsByDate);
 
     // Display aggregated stats
@@ -457,24 +463,114 @@ function groupEventsByDate(events, startDate, endDate) {
     return eventsByDate;
 }
 
+// Calculate overall distribution for entire period
+function calculateOverallDistribution(eventsByDate) {
+    const overall = {
+        prod: 0,
+        nonprod: 0,
+        admin: 0,
+        other: 0,
+        total: 0
+    };
+
+    Object.values(eventsByDate).forEach(day => {
+        overall.prod += day.prod;
+        overall.nonprod += day.nonprod;
+        overall.admin += day.admin;
+        overall.other += day.other;
+        overall.total += day.total;
+    });
+
+    // Calculate percentages
+    Object.keys(overall).forEach(key => {
+        if (key !== 'total') {
+            overall[`${key}Percentage`] = overall.total > 0 ? (overall[key] / overall.total) * 100 : 0;
+        }
+    });
+
+    return overall;
+}
+
+// Display overall distribution summary for week/month
+function displayOverallDistributionSummary(overall, range) {
+    const chartContainer = distributionChart;
+    
+    // Create overall summary section
+    const summaryDiv = document.createElement('div');
+    summaryDiv.className = 'overall-summary';
+    summaryDiv.innerHTML = `
+        <h4>Overall ${range === 'week' ? 'Weekly' : 'Monthly'} Distribution</h4>
+        <div class="overall-bars">
+            <div class="overall-bar">
+                <div class="overall-bar-label">🟢 Production Work</div>
+                <div class="overall-bar-container">
+                    <div class="overall-bar-fill bar-prod" style="width: ${Math.max(overall.prodPercentage || 0, 5)}%"></div>
+                </div>
+                <div class="overall-bar-time">${Math.floor((overall.prod || 0)/60)}h ${Math.floor((overall.prod || 0)%60)}m (${(overall.prodPercentage || 0).toFixed(1)}%)</div>
+            </div>
+            <div class="overall-bar">
+                <div class="overall-bar-label">⚫ Non-Production</div>
+                <div class="overall-bar-container">
+                    <div class="overall-bar-fill bar-nonprod" style="width: ${Math.max(overall.nonprodPercentage || 0, 5)}%"></div>
+                </div>
+                <div class="overall-bar-time">${Math.floor((overall.nonprod || 0)/60)}h ${Math.floor((overall.nonprod || 0)%60)}m (${(overall.nonprodPercentage || 0).toFixed(1)}%)</div>
+            </div>
+            <div class="overall-bar">
+                <div class="overall-bar-label">🟠 Admin & Rest</div>
+                <div class="overall-bar-container">
+                    <div class="overall-bar-fill bar-admin" style="width: ${Math.max(overall.adminPercentage || 0, 5)}%"></div>
+                </div>
+                <div class="overall-bar-time">${Math.floor((overall.admin || 0)/60)}h ${Math.floor((overall.admin || 0)%60)}m (${(overall.adminPercentage || 0).toFixed(1)}%)</div>
+            </div>
+            <div class="overall-bar">
+                <div class="overall-bar-label">⚪ Other Activities</div>
+                <div class="overall-bar-container">
+                    <div class="overall-bar-fill bar-other" style="width: ${Math.max(overall.otherPercentage || 0, 5)}%"></div>
+                </div>
+                <div class="overall-bar-time">${Math.floor((overall.other || 0)/60)}h ${Math.floor((overall.other || 0)%60)}m (${(overall.otherPercentage || 0).toFixed(1)}%)</div>
+            </div>
+        </div>
+        <div class="daily-breakdown-header">
+            <h4>Daily Breakdown</h4>
+        </div>
+    `;
+    
+    // Clear and add summary
+    chartContainer.innerHTML = '';
+    chartContainer.appendChild(summaryDiv);
+}
+
 // Display stacked chart
 function displayStackedChart(eventsByDate) {
-    distributionChart.innerHTML = '';
-
+    // Do not clear distributionChart.innerHTML here as it contains the overall summary!
     const dates = Object.keys(eventsByDate).sort();
 
     if (dates.length === 0) {
-        distributionChart.innerHTML = '<div class="no-events">No events found in this date range</div>';
+        const noEventsDiv = document.createElement('div');
+        noEventsDiv.className = 'no-events';
+        noEventsDiv.textContent = 'No events found in this date range';
+        distributionChart.appendChild(noEventsDiv);
         return;
     }
+
+    // Remove any existing daily charts container before adding a new one
+    const oldDaily = distributionChart.querySelector('.daily-charts-container');
+    if (oldDaily) oldDaily.remove();
 
     // Find max total time for scaling
     const maxTotal = Math.max(...Object.values(eventsByDate).map(day => day.total));
 
     if (maxTotal === 0) {
-        distributionChart.innerHTML = '<div class="no-events">No timed events found in this date range</div>';
+        const noEventsDiv = document.createElement('div');
+        noEventsDiv.className = 'no-events';
+        noEventsDiv.textContent = 'No timed events found in this date range';
+        distributionChart.appendChild(noEventsDiv);
         return;
     }
+
+    // Create container for daily stacked charts
+    const dailyChartsContainer = document.createElement('div');
+    dailyChartsContainer.className = 'daily-charts-container';
 
     dates.forEach(dateKey => {
         const dayData = eventsByDate[dateKey];
@@ -506,8 +602,11 @@ function displayStackedChart(eventsByDate) {
             <div class="stacked-date">${dayData.displayDate}</div>
         `;
 
-        distributionChart.appendChild(dayElement);
+        dailyChartsContainer.appendChild(dayElement);
     });
+
+    // Add the daily charts container to the main distribution chart, after the summary
+    distributionChart.appendChild(dailyChartsContainer);
 }
 
 // Display aggregated statistics for date range

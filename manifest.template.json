@@ -5,7 +5,8 @@
   "description": "Beautiful time series visualization for your Google Calendar diary entries",
   "permissions": [
     "identity",
-    "storage"
+    "storage",
+    "tabs"
   ],
   "host_permissions": [
     "https://www.googleapis.com/*"

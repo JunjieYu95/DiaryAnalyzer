@@ -26,21 +26,32 @@ body {
 .header {
     background-color: #ffffff;
     border-bottom: 1px solid #e0e0e0;
-    padding: 16px 24px;
+    padding: 16px 24px 20px 24px;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .header h1 {
     font-size: 20px;
     font-weight: 600;
     color: #333;
+    text-align: center;
+    margin: 0;
 }
 
 .controls {
     display: flex;
     gap: 12px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+
+.button-controls {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
     align-items: center;
 }
 
@@ -61,21 +72,39 @@ body {
     color: #333;
 }
 
-.refresh-btn, .zoom-btn {
-    background-color: #f0f2f5;
-    border: 1px solid #dcdfe6;
-    color: #606266;
-    padding: 8px 12px;
-    border-radius: 6px;
+.refresh-btn, .zoom-btn, .full-view-btn {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    color: #495057;
+    padding: 10px 16px;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.2s, color 0.2s;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    flex: 1;
+    max-width: 150px;
 }
 
 .refresh-btn:hover, .zoom-btn:hover {
-    background-color: #e4e7ed;
+    background-color: #e9ecef;
     color: #333;
+    transform: translateY(-1px);
 }
+
+.full-view-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: 1px solid transparent;
+}
+
+.full-view-btn:hover {
+    background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+
 
 /* Auth Section */
 .auth-section {
@@ -272,10 +301,11 @@ body {
 .distribution-chart {
     margin-bottom: 20px;
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-items: flex-end;
-    min-height: 60px;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 200px;
+    max-height: 400px;
+    overflow-y: auto;
 }
 
 .calendar-bar {
@@ -321,9 +351,9 @@ body {
 }
 
 .bar-prod { background: linear-gradient(90deg, #4CAF50, #66BB6A); }
-.bar-nonprod { background: linear-gradient(90deg, #2196F3, #42A5F5); }
+.bar-nonprod { background: linear-gradient(90deg, #757575, #9E9E9E); }
 .bar-admin { background: linear-gradient(90deg, #FF9800, #FFB74D); }
-.bar-other { background: linear-gradient(90deg, #9E9E9E, #BDBDBD); }
+.bar-other { background: linear-gradient(90deg, #BDBDBD, #E0E0E0); }
 
 .distribution-stats {
     display: grid;
@@ -405,6 +435,97 @@ body {
     font-size: 11px;
     color: #666;
     font-weight: 500;
+}
+
+/* Overall Distribution Summary Styles */
+.overall-summary {
+    margin-bottom: 20px;
+    padding: 20px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e9ecef;
+}
+
+.overall-summary h4 {
+    margin: 0 0 16px 0;
+    color: #333;
+    font-size: 16px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.overall-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.overall-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    background: #f8f9fa;
+    border-radius: 6px;
+}
+
+.overall-bar-label {
+    min-width: 120px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #333;
+}
+
+.overall-bar-container {
+    flex: 1;
+    height: 20px;
+    background: #e9ecef;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+}
+
+.overall-bar-fill {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.3s ease;
+}
+
+.overall-bar-time {
+    min-width: 140px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #333;
+    text-align: right;
+}
+
+.daily-breakdown-header {
+    margin-top: 24px;
+    margin-bottom: 16px;
+    border-top: 1px solid #e9ecef;
+    padding-top: 16px;
+}
+
+.daily-breakdown-header h4 {
+    margin: 0;
+    color: #666;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+}
+
+/* Daily Charts Container */
+.daily-charts-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 4px 0 0 0;
+    background: none;
+    border-radius: 0;
+    min-height: 0;
 }
 
 /* Stats Section */
