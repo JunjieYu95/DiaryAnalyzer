@@ -993,34 +993,36 @@ function displayAdvancedAnalytics() {
     const endDate = getDateRangeEnd();
     const eventsByDate = groupEventsByDate(allEvents, startDate, endDate);
 
-    // Time series chart
+    // Enhanced time series chart showing category transitions over time
     const timeSeriesLabels = Object.keys(eventsByDate).sort();
-    const timeSeriesDatasets = [
-        {
-            label: 'Production',
-            data: timeSeriesLabels.map(date => eventsByDate[date].prod / 60),
-            borderColor: 'rgba(75, 192, 192, 1)',
-            backgroundColor: 'rgba(75, 192, 192, 0.2)',
-            fill: true,
-        },
-        {
-            label: 'Non-Production',
-            data: timeSeriesLabels.map(date => eventsByDate[date].nonprod / 60),
-            borderColor: 'rgba(54, 162, 235, 1)',
-            backgroundColor: 'rgba(54, 162, 235, 0.2)',
-            fill: true,
-        },
-        {
-            label: 'Admin & Rest',
-            data: timeSeriesLabels.map(date => eventsByDate[date].admin / 60),
-            borderColor: 'rgba(255, 159, 64, 1)',
-            backgroundColor: 'rgba(255, 159, 64, 0.2)',
-            fill: true,
-        }
-    ];
+    const categoryTimeData = calculateCategoryTimeSeriesData(eventsByDate, timeSeriesLabels);
+    
+    const categoryColors = {
+        'work': 'rgba(76, 175, 80, 0.8)',
+        'meeting': 'rgba(33, 150, 243, 0.8)', 
+        'food': 'rgba(255, 152, 0, 0.8)',
+        'rest': 'rgba(156, 39, 176, 0.8)',
+        'personal': 'rgba(255, 193, 7, 0.8)',
+        'other': 'rgba(96, 125, 139, 0.8)'
+    };
+
+    const timeSeriesDatasets = Object.keys(categoryColors).map(category => ({
+        label: category.charAt(0).toUpperCase() + category.slice(1),
+        data: timeSeriesLabels.map(date => categoryTimeData[date]?.[category] / 60 || 0),
+        borderColor: categoryColors[category],
+        backgroundColor: categoryColors[category].replace('0.8', '0.3'),
+        fill: true,
+        tension: 0.4
+    }));
 
     const timeSeriesCtx = document.getElementById('timeSeriesChart').getContext('2d');
-    new Chart(timeSeriesCtx, {
+    
+    // Destroy existing chart if it exists
+    if (window.timeSeriesChart) {
+        window.timeSeriesChart.destroy();
+    }
+    
+    window.timeSeriesChart = new Chart(timeSeriesCtx, {
         type: 'line',
         data: {
             labels: timeSeriesLabels.map(date => eventsByDate[date].displayDate),
@@ -1028,54 +1030,175 @@ function displayAdvancedAnalytics() {
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Category Time Series - How You Shift Between Activities',
+                    font: {
+                        size: 16,
+                        weight: 'bold'
+                    }
+                },
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        title: function(context) {
+                            return context[0].label;
+                        },
+                        label: function(context) {
+                            const hours = context.parsed.y.toFixed(1);
+                            return `${context.dataset.label}: ${hours}h`;
+                        },
+                        footer: function(tooltipItems) {
+                            const total = tooltipItems.reduce((sum, item) => sum + item.parsed.y, 0);
+                            return `Total: ${total.toFixed(1)}h`;
+                        }
+                    }
+                }
+            },
             scales: {
                 x: {
                     display: true,
                     title: {
                         display: true,
-                        text: 'Date'
+                        text: 'Date',
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    },
+                    grid: {
+                        display: true,
+                        color: 'rgba(0, 0, 0, 0.1)'
                     }
                 },
                 y: {
                     display: true,
                     title: {
                         display: true,
-                        text: 'Hours'
+                        text: 'Hours per Day',
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    },
+                    beginAtZero: true,
+                    grid: {
+                        display: true,
+                        color: 'rgba(0, 0, 0, 0.1)'
                     }
                 }
             }
         }
     });
 
-    // Category chart
+    // Enhanced category distribution chart
     const categoryDistribution = calculateCategoryTimeDistribution(allEvents);
     const categoryLabels = Object.keys(categoryDistribution);
     const categoryData = Object.values(categoryDistribution).map(c => c.minutes / 60);
-    const categoryColors = Object.values(categoryDistribution).map(c => c.color);
+    
+    const enhancedCategoryColors = {
+        'work': '#4CAF50',
+        'meeting': '#2196F3', 
+        'food': '#FF9800',
+        'rest': '#9C27B0',
+        'personal': '#FFC107',
+        'other': '#607D8B'
+    };
+    
+    const categoryColors = categoryLabels.map(label => enhancedCategoryColors[label] || '#607D8B');
 
     const categoryCtx = document.getElementById('categoryChart').getContext('2d');
-    new Chart(categoryCtx, {
+    
+    // Destroy existing chart if it exists
+    if (window.categoryChart) {
+        window.categoryChart.destroy();
+    }
+    
+    window.categoryChart = new Chart(categoryCtx, {
         type: 'doughnut',
         data: {
-            labels: categoryLabels,
+            labels: categoryLabels.map(label => label.charAt(0).toUpperCase() + label.slice(1)),
             datasets: [{
                 data: categoryData,
                 backgroundColor: categoryColors,
+                borderWidth: 2,
+                borderColor: '#ffffff'
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    position: 'top',
+                    position: 'right',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 20
+                    }
                 },
                 title: {
                     display: true,
-                    text: 'Time by Category'
+                    text: 'Overall Time Distribution by Category',
+                    font: {
+                        size: 16,
+                        weight: 'bold'
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label;
+                            const hours = context.parsed.toFixed(1);
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((context.parsed / total) * 100).toFixed(1);
+                            return `${label}: ${hours}h (${percentage}%)`;
+                        }
+                    }
                 }
             }
         }
     });
+}
+
+// Calculate category time series data for comprehensive visualization
+function calculateCategoryTimeSeriesData(eventsByDate, dateLabels) {
+    const categoryTimeData = {};
+    
+    dateLabels.forEach(dateKey => {
+        categoryTimeData[dateKey] = {
+            'work': 0,
+            'meeting': 0, 
+            'food': 0,
+            'rest': 0,
+            'personal': 0,
+            'other': 0
+        };
+        
+        const dayEvents = eventsByDate[dateKey]?.events || [];
+        
+        dayEvents.forEach(event => {
+            if (event.start.dateTime && event.end.dateTime) {
+                const start = new Date(event.start.dateTime);
+                const end = new Date(event.end.dateTime);
+                const duration = (end - start) / (1000 * 60); // minutes
+                
+                const category = categorizeEvent(event.summary);
+                categoryTimeData[dateKey][category] += duration;
+            }
+        });
+    });
+    
+    return categoryTimeData;
 }
 
 function calculateCategoryTimeDistribution(events) {
@@ -1105,14 +1228,14 @@ function calculateCategoryTimeDistribution(events) {
 
 function getCategoryColor(category) {
     const colors = {
-        'work': '#e3f2fd',
-        'food': '#fff3e0',
-        'rest': '#f3e5f5',
-        'meeting': '#e8f5e8',
-        'personal': '#fff8e1',
-        'other': '#f5f5f5'
+        'work': '#4CAF50',
+        'meeting': '#2196F3', 
+        'food': '#FF9800',
+        'rest': '#9C27B0',
+        'personal': '#FFC107',
+        'other': '#607D8B'
     };
-    return colors[category] || '#f5f5f5';
+    return colors[category] || '#607D8B';
 }
 
 // Refresh data
