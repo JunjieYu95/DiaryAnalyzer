@@ -35,9 +35,11 @@ function getLocalDateKey(date) {
 }
 
 // Initialize the extension
+// Attach event listeners first so UI buttons (especially "Connect Calendar") respond immediately
+// even while asynchronous authentication checks are still running.
 document.addEventListener('DOMContentLoaded', async () => {
-    await checkAuthStatus();
     setupEventListeners();
+    await checkAuthStatus();
     updateCurrentDateDisplay();
 });
 
