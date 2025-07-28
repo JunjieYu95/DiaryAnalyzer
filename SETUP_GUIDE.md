@@ -1,4 +1,4 @@
-# Detailed Setup Guide for Dairy Analyzer Chrome Extension
+# Detailed Setup Guide for Diary Analyzer Chrome Extension
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@
 1. **Create a new project:**
    - Go to [Google Cloud Console](https://console.cloud.google.com/)
    - Click "Select a project" → "New Project"
-   - Name your project (e.g., "Dairy Analyzer")
+   - Name your project (e.g., "Diary Analyzer")
    - Click "Create"
 
 2. **Enable Google Calendar API:**
@@ -28,7 +28,7 @@
    - If prompted, configure the OAuth consent screen:
      - Choose "External" (unless you have a Google Workspace account)
      - Fill in the required fields:
-       - App name: "Dairy Analyzer"
+       - App name: "Diary Analyzer"
        - User support email: your email
        - Developer contact information: your email
      - Click "Save and Continue"
@@ -37,7 +37,7 @@
      - Click "Save and Continue"
    - Now create the OAuth client ID:
      - Application type: "Web application"
-     - Name: "Dairy Analyzer Extension"
+     - Name: "Diary Analyzer Extension"
      - Authorized JavaScript origins: `chrome-extension://[EXTENSION_ID]`
      - Authorized redirect URIs: `https://[EXTENSION_ID].chromiumapp.org/`
    - Click "Create"
@@ -48,7 +48,7 @@
 1. **Get your extension ID:**
    - Load the extension as unpacked in Chrome
    - Go to `chrome://extensions/`
-   - Find "Dairy Analyzer" and copy the extension ID
+   - Find "Diary Analyzer" and copy the extension ID
 
 2. **Update Google Cloud Console:**
    - Go back to your OAuth credentials
@@ -67,7 +67,7 @@
    - Open Chrome and go to `chrome://extensions/`
    - Enable "Developer mode" (toggle in top right)
    - Click "Load unpacked"
-   - Select your DairyAnalyzer folder
+   - Select your DiaryAnalyzer folder
 
 2. **Test the extension:**
    - Click the extension icon in Chrome toolbar

@@ -35,9 +35,11 @@ function getLocalDateKey(date) {
 }
 
 // Initialize the extension
+// Attach event listeners first so UI buttons (especially "Connect Calendar") respond immediately
+// even while asynchronous authentication checks are still running.
 document.addEventListener('DOMContentLoaded', async () => {
-    await checkAuthStatus();
     setupEventListeners();
+    await checkAuthStatus();
     updateCurrentDateDisplay();
 });
 
@@ -50,6 +52,12 @@ function setupEventListeners() {
     viewMode.addEventListener('change', onViewModeChange);
     prevDayBtn.addEventListener('click', () => navigateDate(-1));
     nextDayBtn.addEventListener('click', () => navigateDate(1));
+    
+    // Chart mode selector for advanced analytics
+    const chartModeSelector = document.getElementById('chartMode');
+    if (chartModeSelector) {
+        chartModeSelector.addEventListener('change', onChartModeChange);
+    }
 }
 
 // Check authentication status
@@ -424,11 +432,42 @@ function displayStackedDistribution() {
 
 // Group events by date for stacked visualization
 function groupEventsByDate(events, startDate, endDate) {
+    console.log('🗓️ groupEventsByDate called:', { 
+        startDate: startDate?.toISOString(), 
+        endDate: endDate?.toISOString(),
+        eventsCount: events?.length 
+    });
+    
+    // Safety checks to prevent infinite loops
+    if (!startDate || !endDate || !(startDate instanceof Date) || !(endDate instanceof Date)) {
+        console.error('❌ Invalid date parameters:', { startDate, endDate });
+        return {};
+    }
+    
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        console.error('❌ Invalid date values:', { startDate, endDate });
+        return {};
+    }
+    
+    if (startDate > endDate) {
+        console.error('❌ Start date is after end date:', { startDate, endDate });
+        return {};
+    }
+    
+    // Limit to reasonable date range (max 1 year)
+    const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+    if (daysDiff > 365) {
+        console.error('❌ Date range too large:', daysDiff, 'days');
+        return {};
+    }
+    
     const eventsByDate = {};
+    let loopCount = 0;
+    const MAX_ITERATIONS = 400; // Safety limit
 
     // Initialize all dates in range using local timezone
     const currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
+    while (currentDate <= endDate && loopCount < MAX_ITERATIONS) {
         const dateKey = getLocalDateKey(currentDate);
         eventsByDate[dateKey] = {
             date: new Date(currentDate),
@@ -440,7 +479,15 @@ function groupEventsByDate(events, startDate, endDate) {
             total: 0
         };
         currentDate.setDate(currentDate.getDate() + 1);
+        loopCount++;
     }
+    
+    if (loopCount >= MAX_ITERATIONS) {
+        console.error('❌ Loop limit reached in groupEventsByDate');
+        return {};
+    }
+    
+    console.log('✅ Date range initialized:', Object.keys(eventsByDate).length, 'days');
 
     // Group events by date and calculate time per calendar type
     events.forEach(event => {
@@ -817,7 +864,7 @@ function displayDistributionStats(calendarData) {
     });
 }
 
-// Categorize event based on title
+// Categorize event based on title (legacy function, kept for compatibility)
 function categorizeEvent(title) {
     if (!title) return 'other';
 
@@ -988,49 +1035,191 @@ function displayCurrentView() {
     }
 }
 
+function stopAllCharts() {
+    console.log('🛑 Stopping all charts...');
+    
+    // Destroy and nullify all charts
+    if (window.timeSeriesChart) {
+        try {
+            window.timeSeriesChart.destroy();
+        } catch (e) {}
+        window.timeSeriesChart = null;
+    }
+    
+    if (window.categoryChart) {
+        try {
+            window.categoryChart.destroy();
+        } catch (e) {}
+        window.categoryChart = null;
+    }
+    
+    // Clear canvases manually
+    const timeSeriesCtx = document.getElementById('timeSeriesChart')?.getContext('2d');
+    const categoryCtx = document.getElementById('categoryChart')?.getContext('2d');
+    
+    if (timeSeriesCtx) {
+        timeSeriesCtx.clearRect(0, 0, timeSeriesCtx.canvas.width, timeSeriesCtx.canvas.height);
+    }
+    if (categoryCtx) {
+        categoryCtx.clearRect(0, 0, categoryCtx.canvas.width, categoryCtx.canvas.height);
+    }
+    
+    console.log('✅ All charts stopped');
+}
+
+function onChartModeChange() {
+    const chartMode = document.getElementById('chartMode').value;
+    console.log('📊 Chart mode changed to:', chartMode);
+    
+    // Stop all existing charts first
+    stopAllCharts();
+    
+    // Wait a bit then display new charts
+    setTimeout(() => {
+        displayAdvancedAnalytics();
+    }, 200);
+}
+
+// Prevent multiple simultaneous calls
+let isDisplayingAnalytics = false;
+
+// Globally disable all Chart.js animations and responsive behavior
+if (typeof Chart !== 'undefined') {
+    Chart.defaults.animation = false;
+    Chart.defaults.animations = false;
+    Chart.defaults.responsive = false;
+    Chart.defaults.interaction.intersect = false;
+    Chart.defaults.hover.mode = null;
+}
+
 function displayAdvancedAnalytics() {
+    if (isDisplayingAnalytics) {
+        console.log('⚠️ displayAdvancedAnalytics already running, skipping...');
+        return;
+    }
+    
+    isDisplayingAnalytics = true;
+    console.log('🚀 Starting displayAdvancedAnalytics...');
+    
+    try {
+        const chartMode = document.getElementById('chartMode')?.value || 'daily-totals';
+        
+        if (chartMode === 'timeline-flow') {
+            displayTimelineFlow();
+        } else {
+            displayDailyTotals();
+        }
+    } catch (error) {
+        console.error('❌ Error in displayAdvancedAnalytics:', error);
+    } finally {
+        isDisplayingAnalytics = false;
+        console.log('✅ displayAdvancedAnalytics completed');
+    }
+}
+
+function displayDailyTotals() {
+    console.log('📊 Starting displayDailyTotals...');
+    
+    // Clean up timeline mode artifacts
+    const chartContainer = document.getElementById('advancedCharts');
+    const existingLegend = chartContainer.querySelector('.timeline-legend');
+    if (existingLegend) {
+        existingLegend.remove();
+    }
+    
+    // Ensure proper canvas sizing and visibility - only show time series chart
+    const timeSeriesCanvas = document.getElementById('timeSeriesChart');
+    const categoryCanvas = document.getElementById('categoryChart');
+    
+    if (!timeSeriesCanvas || !categoryCanvas) {
+        console.error('❌ Required canvas elements not found');
+        return;
+    }
+    
+    // Set explicit canvas dimensions (not responsive to prevent loops)
+    timeSeriesCanvas.width = 800;
+    timeSeriesCanvas.height = 400;
+    timeSeriesCanvas.style.width = '100%';
+    timeSeriesCanvas.style.height = '400px';
+    timeSeriesCanvas.style.display = 'block';
+    
+    // Hide the category chart since it's redundant with the distribution view
+    categoryCanvas.style.display = 'none';
+    
     const startDate = getDateRangeStart();
     const endDate = getDateRangeEnd();
+    
+    // Safety check for valid dates
+    if (!startDate || !endDate) {
+        console.error('❌ Invalid date range for displayDailyTotals');
+        return;
+    }
+    
     const eventsByDate = groupEventsByDate(allEvents, startDate, endDate);
+    
+    // Check if groupEventsByDate returned empty due to error
+    if (!eventsByDate || Object.keys(eventsByDate).length === 0) {
+        console.error('❌ No events by date returned, skipping chart creation');
+        return;
+    }
 
     // Enhanced time series chart showing category transitions over time
     const timeSeriesLabels = Object.keys(eventsByDate).sort();
-    const categoryTimeData = calculateCategoryTimeSeriesData(eventsByDate, timeSeriesLabels);
+    const categoryTimeData = calculateCategoryTimeSeriesData(allEvents, timeSeriesLabels);
+    
+    console.log('📅 Time series labels:', timeSeriesLabels);
+    console.log('📊 Events to process:', allEvents.length);
     
     const categoryColors = {
-        'work': 'rgba(76, 175, 80, 0.8)',
-        'meeting': 'rgba(33, 150, 243, 0.8)', 
-        'food': 'rgba(255, 152, 0, 0.8)',
-        'rest': 'rgba(156, 39, 176, 0.8)',
-        'personal': 'rgba(255, 193, 7, 0.8)',
-        'other': 'rgba(96, 125, 139, 0.8)'
+        'prod': 'rgba(76, 175, 80, 0.8)',      // Green - Production Work
+        'nonprod': 'rgba(117, 117, 117, 0.8)', // Grey - Non-Production  
+        'admin': 'rgba(255, 152, 0, 0.8)',     // Orange - Admin & Rest
+        'other': 'rgba(189, 189, 189, 0.8)'    // Light Grey - Other Activities
     };
 
-    const timeSeriesDatasets = Object.keys(categoryColors).map(category => ({
-        label: category.charAt(0).toUpperCase() + category.slice(1),
-        data: timeSeriesLabels.map(date => categoryTimeData[date]?.[category] / 60 || 0),
-        borderColor: categoryColors[category],
-        backgroundColor: categoryColors[category].replace('0.8', '0.3'),
-        fill: true,
-        tension: 0.4
-    }));
+    const timeSeriesDatasets = Object.keys(categoryColors).map(category => {
+        const data = timeSeriesLabels.map(date => {
+            const minutes = categoryTimeData[date] ? categoryTimeData[date][category] || 0 : 0;
+            return minutes / 60; // Convert to hours
+        });
+        
+        console.log(`📈 ${category} data:`, data);
+        
+        return {
+            label: getCategoryDisplayName(category),
+            data: data,
+            borderColor: categoryColors[category],
+            backgroundColor: categoryColors[category].replace('0.8', '0.3'),
+            fill: true,
+            tension: 0.4
+        };
+    });
 
     const timeSeriesCtx = document.getElementById('timeSeriesChart').getContext('2d');
     
     // Destroy existing chart if it exists
-    if (window.timeSeriesChart) {
+    if (window.timeSeriesChart && typeof window.timeSeriesChart.destroy === 'function') {
         window.timeSeriesChart.destroy();
     }
     
-    window.timeSeriesChart = new Chart(timeSeriesCtx, {
-        type: 'line',
-        data: {
-            labels: timeSeriesLabels.map(date => eventsByDate[date].displayDate),
-            datasets: timeSeriesDatasets
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            try {
+            window.timeSeriesChart = new Chart(timeSeriesCtx, {
+                type: 'line',
+                data: {
+                    labels: timeSeriesLabels.map(date => eventsByDate[date].displayDate),
+                    datasets: timeSeriesDatasets
+                },
+                options: {
+                    responsive: false,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    animations: false,
+                    transitions: {
+                        active: { animation: { duration: 0 } },
+                        resize: { animation: { duration: 0 } },
+                        show: { animation: { duration: 0 } },
+                        hide: { animation: { duration: 0 } }
+                    },
             interaction: {
                 mode: 'index',
                 intersect: false,
@@ -1100,104 +1289,449 @@ function displayAdvancedAnalytics() {
             }
         }
     });
+    } catch (error) {
+        console.error('Error creating time series chart:', error);
+        // Set a fallback so destroy works later
+        window.timeSeriesChart = { destroy: () => {} };
+    }
 
-    // Enhanced category distribution chart
-    const categoryDistribution = calculateCategoryTimeDistribution(allEvents);
-    const categoryLabels = Object.keys(categoryDistribution);
-    const categoryData = Object.values(categoryDistribution).map(c => c.minutes / 60);
+    // Skip creating the category chart since it's redundant with the distribution view
+    // Just ensure any existing category chart is destroyed
+    if (window.categoryChart && typeof window.categoryChart.destroy === 'function') {
+        window.categoryChart.destroy();
+        window.categoryChart = null;
+    }
     
-    const enhancedCategoryColors = {
-        'work': '#4CAF50',
-        'meeting': '#2196F3', 
-        'food': '#FF9800',
-        'rest': '#9C27B0',
-        'personal': '#FFC107',
-        'other': '#607D8B'
+    console.log('✅ displayAdvancedAnalytics completed successfully');
+}
+
+function displayTimelineFlow() {
+    console.log('🕒 Starting timeline flow visualization...');
+    
+    // Get the current date range from UI
+    const startDate = getDateRangeStart();
+    const endDate = getDateRangeEnd();
+    
+    // Safety check for date variables
+    if (!startDate || !endDate) {
+        console.error('❌ Invalid date range for timeline');
+        displayEmptyTimeline();
+        return;
+    }
+    
+    console.log('📅 Timeline date range:', startDate.toISOString().split('T')[0], 'to', endDate.toISOString().split('T')[0]);
+    
+    // Show timeline chart and hide category chart
+    const timeSeriesCanvas = document.getElementById('timeSeriesChart');
+    const categoryCanvas = document.getElementById('categoryChart');
+    
+    if (!timeSeriesCanvas || !categoryCanvas) {
+        console.error('❌ Required canvas elements not found');
+        return;
+    }
+    
+    timeSeriesCanvas.style.display = 'block';
+    categoryCanvas.style.display = 'none';
+    
+    // Ensure proper canvas sizing (not responsive to prevent loops)
+    timeSeriesCanvas.width = 800;
+    timeSeriesCanvas.height = 400;
+    timeSeriesCanvas.style.width = '100%';
+    timeSeriesCanvas.style.height = '400px';
+    
+    // Filter events for the selected date range
+    const rangeEvents = allEvents.filter(event => {
+        if (!event.start.dateTime || !event.end.dateTime) return false;
+        const eventDate = new Date(event.start.dateTime);
+        return eventDate >= startDate && eventDate <= endDate;
+    }).sort((a, b) => new Date(a.start.dateTime) - new Date(b.start.dateTime));
+    
+    console.log(`📅 Processing ${rangeEvents.length} events for timeline from ${startDate.toDateString()} to ${endDate.toDateString()}`);
+    
+    if (rangeEvents.length === 0) {
+        displayEmptyTimeline();
+        return;
+    }
+    
+    // Process events into timeline data with multi-day X-axis
+    const timelineData = rangeEvents.map(event => {
+        const startTime = new Date(event.start.dateTime);
+        const endTime = new Date(event.end.dateTime);
+        const category = getCalendarKey(event.calendarName);
+        
+        // Calculate minutes from the start date (not midnight of each day)
+        const startMinutesFromRange = Math.floor((startTime - startDate) / (1000 * 60));
+        const endMinutesFromRange = Math.floor((endTime - startDate) / (1000 * 60));
+        
+        return {
+            title: event.summary || 'Untitled Event',
+            category: category,
+            categoryLevel: getCategoryLevel(category),
+            startTime: startTime,
+            endTime: endTime,
+            startMinutes: startMinutesFromRange,
+            endMinutes: endMinutesFromRange,
+            duration: (endTime - startTime) / (1000 * 60), // minutes
+            color: getCategoryColor(category)
+        };
+    });
+    
+    console.log('📊 Timeline data processed:', timelineData);
+    
+    // Create timeline visualization
+    createTimelineChart(timelineData, startDate, endDate);
+}
+
+function getCategoryLevel(category) {
+    // Map categories to discrete Y-axis levels
+    const levels = {
+        'prod': 3,
+        'nonprod': 2, 
+        'admin': 1,
+        'other': 0
     };
-    
-    const categoryColors = categoryLabels.map(label => enhancedCategoryColors[label] || '#607D8B');
+    return levels[category] || 0;
+}
 
-    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+function getMinutesFromMidnight(date) {
+    return date.getHours() * 60 + date.getMinutes();
+}
+
+function createTimelineChart(timelineData, startDate, endDate) {
+    const timeSeriesCtx = document.getElementById('timeSeriesChart').getContext('2d');
+    const categoryCanvas = document.getElementById('categoryChart');
     
-    // Destroy existing chart if it exists
-    if (window.categoryChart) {
+    // Destroy existing charts
+    if (window.timeSeriesChart && typeof window.timeSeriesChart.destroy === 'function') {
+        window.timeSeriesChart.destroy();
+    }
+    if (window.categoryChart && typeof window.categoryChart.destroy === 'function') {
         window.categoryChart.destroy();
     }
     
-    window.categoryChart = new Chart(categoryCtx, {
-        type: 'doughnut',
-        data: {
-            labels: categoryLabels.map(label => label.charAt(0).toUpperCase() + label.slice(1)),
-            datasets: [{
-                data: categoryData,
-                backgroundColor: categoryColors,
-                borderWidth: 2,
-                borderColor: '#ffffff'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'right',
-                    labels: {
-                        usePointStyle: true,
-                        padding: 20
+    // Create custom timeline visualization
+    try {
+        // Create a simple chart with timeline bars drawn using canvas directly
+        window.timeSeriesChart = new Chart(timeSeriesCtx, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'Timeline Events',
+                    data: [], // Empty data - we'll draw manually
+                    backgroundColor: 'transparent'
+                }]
+            },
+            options: {
+                responsive: false,
+                maintainAspectRatio: false,
+                animation: false,
+                animations: false,
+                interaction: { intersect: false, mode: null },
+                hover: { mode: null },
+                transitions: {
+                    active: { animation: { duration: 0 } },
+                    resize: { animation: { duration: 0 } },
+                    show: { animation: { duration: 0 } },
+                    hide: { animation: { duration: 0 } }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: (() => {
+                            if (startDate.toDateString() === endDate.toDateString()) {
+                                return `Activity Timeline - ${startDate.toDateString()}`;
+                            } else {
+                                return `Activity Timeline - ${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} to ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+                            }
+                        })(),
+                        font: { size: 16, weight: 'bold' }
+                    },
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        enabled: false
                     }
                 },
-                title: {
-                    display: true,
-                    text: 'Overall Time Distribution by Category',
-                    font: {
-                        size: 16,
-                        weight: 'bold'
-                    }
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            const label = context.label;
-                            const hours = context.parsed.toFixed(1);
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = ((context.parsed / total) * 100).toFixed(1);
-                            return `${label}: ${hours}h (${percentage}%)`;
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'bottom',
+                        title: {
+                            display: true,
+                            text: (() => {
+                                const daysDifference = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+                                const numDays = Math.max(1, daysDifference);
+                                return numDays === 1 ? 'Time of Day' : `Time (${numDays} days)`;
+                            })()
+                        },
+                        min: timelineData.length > 0 ? Math.max(0, Math.min(...timelineData.map(d => d.startMinutes)) - 60) : 0,
+                        max: (() => {
+                            const daysDifference = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+                            const numDays = Math.max(1, daysDifference); // At least 1 day
+                            
+                            if (numDays === 1) {
+                                // Single day: show just 24 hours (1440 minutes)
+                                return 1440;
+                            } else {
+                                // Multi-day: calculate actual range duration
+                                const rangeDurationMinutes = Math.ceil((endDate - startDate) / (1000 * 60)) + 1440; // Add 24h buffer for multi-day
+                                return timelineData.length > 0 ? 
+                                    Math.max(rangeDurationMinutes, Math.max(...timelineData.map(d => d.endMinutes)) + 60) : 
+                                    rangeDurationMinutes;
+                            }
+                        })(),
+                        ticks: {
+                            stepSize: (() => {
+                                const daysDifference = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+                                const numDays = Math.max(1, daysDifference);
+                                return numDays === 1 ? 60 : 360; // 1 hour for single day, 6 hours for multi-day
+                            })(),
+                            callback: function(value) {
+                                const totalMinutes = value;
+                                const days = Math.floor(totalMinutes / 1440);
+                                const remainingMinutes = totalMinutes % 1440;
+                                const hours = Math.floor(remainingMinutes / 60);
+                                const minutes = remainingMinutes % 60;
+                                
+                                const daysDifference = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+                                const numDays = Math.max(1, daysDifference);
+                                
+                                if (numDays === 1) {
+                                    // Single day: show time only
+                                    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                                } else {
+                                    // Multi-day: show day + time
+                                    const date = new Date(startDate.getTime() + totalMinutes * 60 * 1000);
+                                    return date.toLocaleDateString('en-US', { 
+                                        weekday: 'short', 
+                                        month: 'numeric', 
+                                        day: 'numeric',
+                                        hour: '2-digit'
+                                    });
+                                }
+                            }
+                        }
+                    },
+                    y: {
+                        type: 'linear',
+                        title: {
+                            display: true,
+                            text: 'Activity Category'
+                        },
+                        min: -0.5,
+                        max: 3.5,
+                        ticks: {
+                            stepSize: 1,
+                            callback: function(value) {
+                                const labels = {
+                                    0: 'Other',
+                                    1: 'Admin & Rest',
+                                    2: 'Non-Production',
+                                    3: 'Production Work'
+                                };
+                                return labels[value] || '';
+                            }
                         }
                     }
                 }
             }
+        });
+        
+        // Draw timeline bars after chart is completely ready
+        setTimeout(() => {
+            try {
+                if (window.timeSeriesChart && 
+                    window.timeSeriesChart.chartArea && 
+                    window.timeSeriesChart.scales &&
+                    !isDisplayingAnalytics) {
+                    drawTimelineBars(timeSeriesCtx, window.timeSeriesChart.chartArea, window.timeSeriesChart.scales, timelineData);
+                }
+            } catch (error) {
+                console.error('Error drawing timeline bars:', error);
+            }
+        }, 500);
+        
+        // Create custom legend and hide category chart
+        createTimelineLegend();
+        categoryCanvas.style.display = 'none';
+        
+    } catch (error) {
+        console.error('Error creating timeline chart:', error);
+        window.timeSeriesChart = { destroy: () => {} };
+    }
+}
+
+function drawTimelineBars(ctx, chartArea, scales, timelineData) {
+    // Safety checks to prevent infinite loops
+    if (!ctx || !chartArea || !scales || !timelineData || timelineData.length === 0) {
+        console.log('⚠️ Skipping timeline bars - missing required data');
+        return;
+    }
+    
+    if (!scales.x || !scales.y || typeof scales.x.getPixelForValue !== 'function') {
+        console.log('⚠️ Skipping timeline bars - scales not ready');
+        return;
+    }
+    
+    console.log('🎨 Drawing timeline bars for', timelineData.length, 'events');
+    
+    const categoryColors = {
+        'prod': '#4CAF50',
+        'nonprod': '#757575',
+        'admin': '#FF9800',
+        'other': '#BDBDBD'
+    };
+    
+    ctx.save();
+    
+    timelineData.forEach((event, index) => {
+        try {
+            // Convert time to pixel coordinates
+            const startX = scales.x.getPixelForValue(event.startMinutes);
+            const endX = scales.x.getPixelForValue(event.endMinutes);
+            const centerY = scales.y.getPixelForValue(event.categoryLevel);
+            
+            // Safety check for valid coordinates
+            if (isNaN(startX) || isNaN(endX) || isNaN(centerY)) {
+                console.warn(`⚠️ Invalid coordinates for event ${index}:`, {startX, endX, centerY});
+                return;
+            }
+            
+            // Calculate bar dimensions
+            const barWidth = Math.max(0, endX - startX);
+            const barHeight = 20;
+            const barY = centerY - barHeight / 2;
+            
+            // Only draw if bar has positive width and is within chart area
+            if (barWidth > 0 && startX < chartArea.right && endX > chartArea.left) {
+                // Draw the bar
+                ctx.fillStyle = categoryColors[event.category] || '#BDBDBD';
+                ctx.fillRect(startX, barY, barWidth, barHeight);
+                
+                // Draw border
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(startX, barY, barWidth, barHeight);
+                
+                // Add text if bar is wide enough
+                if (barWidth > 50) {
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '10px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    const text = event.title && event.title.length > 15 
+                        ? event.title.substring(0, 12) + '...' 
+                        : event.title || 'Event';
+                    ctx.fillText(text, startX + barWidth / 2, centerY);
+                }
+            }
+        } catch (error) {
+            console.error(`Error drawing event ${index}:`, error);
         }
+    });
+    
+    ctx.restore();
+    console.log('✅ Timeline bars drawing completed');
+}
+
+function createTimelineLegend() {
+    // Create a simple legend below the chart
+    const chartContainer = document.getElementById('advancedCharts');
+    
+    // Remove existing legend
+    const existingLegend = chartContainer.querySelector('.timeline-legend');
+    if (existingLegend) {
+        existingLegend.remove();
+    }
+    
+    const legend = document.createElement('div');
+    legend.className = 'timeline-legend';
+    legend.innerHTML = `
+        <div class="legend-item"><span class="legend-color" style="background-color: #4CAF50;"></span> Production Work</div>
+        <div class="legend-item"><span class="legend-color" style="background-color: #757575;"></span> Non-Production</div>
+        <div class="legend-item"><span class="legend-color" style="background-color: #FF9800;"></span> Admin & Rest</div>
+        <div class="legend-item"><span class="legend-color" style="background-color: #BDBDBD;"></span> Other Activities</div>
+    `;
+    
+    chartContainer.appendChild(legend);
+}
+
+// Legacy function - removed since we're using custom timeline drawing
+
+function formatTimeOnly(date) {
+    return date.toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false 
     });
 }
 
+function displayEmptyTimeline() {
+    const timeSeriesCanvas = document.getElementById('timeSeriesChart');
+    const categoryCanvas = document.getElementById('categoryChart');
+    
+    if (!timeSeriesCanvas || !categoryCanvas) {
+        console.error('❌ Canvas elements not found for empty timeline display');
+        return;
+    }
+    
+    const timeSeriesCtx = timeSeriesCanvas.getContext('2d');
+    const categoryClearCtx = categoryCanvas.getContext('2d');
+    
+    // Clear both charts
+    timeSeriesCtx.clearRect(0, 0, timeSeriesCtx.canvas.width, timeSeriesCtx.canvas.height);
+    categoryClearCtx.clearRect(0, 0, categoryCanvas.width, categoryCanvas.height);
+    
+    // Show message
+    timeSeriesCtx.fillStyle = '#666';
+    timeSeriesCtx.font = '16px Arial';
+    timeSeriesCtx.textAlign = 'center';
+    timeSeriesCtx.fillText(
+        'No events found for the selected date range',
+        timeSeriesCtx.canvas.width / 2,
+        timeSeriesCtx.canvas.height / 2
+    );
+    
+    categoryCanvas.style.display = 'none';
+}
+
 // Calculate category time series data for comprehensive visualization
-function calculateCategoryTimeSeriesData(eventsByDate, dateLabels) {
+function calculateCategoryTimeSeriesData(events, dateLabels) {
+    console.log(`🔍 Processing ${events.length} events across ${dateLabels.length} dates`);
+    
     const categoryTimeData = {};
     
+    // Initialize all date keys with zero values for all categories (matching distribution chart)
     dateLabels.forEach(dateKey => {
         categoryTimeData[dateKey] = {
-            'work': 0,
-            'meeting': 0, 
-            'food': 0,
-            'rest': 0,
-            'personal': 0,
+            'prod': 0,
+            'nonprod': 0,
+            'admin': 0,
             'other': 0
         };
-        
-        const dayEvents = eventsByDate[dateKey]?.events || [];
-        
-        dayEvents.forEach(event => {
-            if (event.start.dateTime && event.end.dateTime) {
+    });
+    
+    // Process all events and categorize them by date and content
+    events.forEach(event => {
+        if (event.start.dateTime && event.end.dateTime) {
+            const eventDate = new Date(event.start.dateTime);
+            const dateKey = getLocalDateKey(eventDate);
+            
+            // Only process events that fall within our date range
+            if (categoryTimeData[dateKey]) {
                 const start = new Date(event.start.dateTime);
                 const end = new Date(event.end.dateTime);
                 const duration = (end - start) / (1000 * 60); // minutes
                 
-                const category = categorizeEvent(event.summary);
+                const category = getCalendarKey(event.calendarName);
                 categoryTimeData[dateKey][category] += duration;
             }
-        });
+        }
     });
     
+    console.log('📊 Category time data calculated:', categoryTimeData);
     return categoryTimeData;
 }
 
@@ -1210,7 +1744,7 @@ function calculateCategoryTimeDistribution(events) {
             const end = new Date(event.end.dateTime);
             const duration = (end - start) / (1000 * 60); // minutes
 
-            const category = categorizeEvent(event.summary);
+            const category = getCalendarKey(event.calendarName);
 
             if (!distribution[category]) {
                 distribution[category] = {
@@ -1223,19 +1757,28 @@ function calculateCategoryTimeDistribution(events) {
         }
     });
 
+    console.log('📊 Category distribution calculated:', distribution);
     return distribution;
 }
 
 function getCategoryColor(category) {
     const colors = {
-        'work': '#4CAF50',
-        'meeting': '#2196F3', 
-        'food': '#FF9800',
-        'rest': '#9C27B0',
-        'personal': '#FFC107',
-        'other': '#607D8B'
+        'prod': '#4CAF50',      // Green - Production Work
+        'nonprod': '#757575',   // Grey - Non-Production
+        'admin': '#FF9800',     // Orange - Admin & Rest
+        'other': '#BDBDBD'      // Light Grey - Other Activities
     };
-    return colors[category] || '#607D8B';
+    return colors[category] || '#BDBDBD';
+}
+
+function getCategoryDisplayName(category) {
+    const displayNames = {
+        'prod': 'Production Work',
+        'nonprod': 'Non-Production',
+        'admin': 'Admin & Rest',
+        'other': 'Other Activities'
+    };
+    return displayNames[category] || 'Other';
 }
 
 // Refresh data

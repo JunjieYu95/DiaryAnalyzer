@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dairy Analyzer - Full View</title>
+    <title>Diary Analyzer - Full View</title>
     <link rel="stylesheet" href="popup.css">
     <script src="chart.js"></script>
 </head>
 <body>
     <div class="container">
         <header class="header">
-            <h1>📊 Dairy Analyzer</h1>
+            <h1>📊 Diary Analyzer</h1>
             <div class="controls">
                 <select id="dateRange" class="date-selector">
                     <option value="today">Today</option>
@@ -61,6 +61,13 @@
             <div id="advancedContainer" class="advanced-container hidden">
                 <div class="advanced-header">
                     <h3>Advanced Analytics</h3>
+                    <div class="chart-mode-selector">
+                        <label for="chartMode">View:</label>
+                        <select id="chartMode" class="chart-mode-dropdown">
+                            <option value="daily-totals">Daily Totals</option>
+                            <option value="timeline-flow">Timeline Flow</option>
+                        </select>
+                    </div>
                 </div>
                 <div id="advancedCharts" class="advanced-charts">
                     <canvas id="timeSeriesChart"></canvas>
