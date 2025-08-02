@@ -289,6 +289,15 @@ function getDateRangeStart() {
             date.setDate(1);
             date.setHours(0, 0, 0, 0);
             break;
+        case 'quarter':
+            const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
+            date.setMonth(quarterStartMonth, 1);
+            date.setHours(0, 0, 0, 0);
+            break;
+        case 'year':
+            date.setMonth(0, 1);
+            date.setHours(0, 0, 0, 0);
+            break;
     }
 
     return date;
@@ -312,6 +321,15 @@ function getDateRangeEnd() {
         case 'month':
             date.setMonth(date.getMonth() + 1);
             date.setDate(0);
+            date.setHours(23, 59, 59, 999);
+            break;
+        case 'quarter':
+            const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
+            date.setMonth(quarterStartMonth + 3, 0);
+            date.setHours(23, 59, 59, 999);
+            break;
+        case 'year':
+            date.setFullYear(date.getFullYear(), 11, 31);
             date.setHours(23, 59, 59, 999);
             break;
     }
@@ -415,7 +433,15 @@ function displayStackedDistribution() {
 
     // Update header
     const subtitle = document.querySelector('.distribution-subtitle');
-    subtitle.textContent = range === 'week' ? 'Weekly time distribution' : 'Monthly time distribution';
+    if (range === 'week') {
+        subtitle.textContent = 'Weekly time distribution';
+    } else if (range === 'month') {
+        subtitle.textContent = 'Monthly time distribution';
+    } else if (range === 'quarter') {
+        subtitle.textContent = 'Quarterly time distribution';
+    } else if (range === 'year') {
+        subtitle.textContent = 'Yearly time distribution';
+    }
 
     // Calculate overall period distribution
     const overallDistribution = calculateOverallDistribution(eventsByDate);
@@ -545,8 +571,20 @@ function displayOverallDistributionSummary(overall, range) {
     // Create overall summary section
     const summaryDiv = document.createElement('div');
     summaryDiv.className = 'overall-summary';
+
+    let rangeTitle;
+    if (range === 'week') {
+        rangeTitle = 'Weekly';
+    } else if (range === 'month') {
+        rangeTitle = 'Monthly';
+    } else if (range === 'quarter') {
+        rangeTitle = 'Quarterly';
+    } else if (range === 'year') {
+        rangeTitle = 'Yearly';
+    }
+
     summaryDiv.innerHTML = `
-        <h4>Overall ${range === 'week' ? 'Weekly' : 'Monthly'} Distribution</h4>
+        <h4>Overall ${rangeTitle} Distribution</h4>
         <div class="overall-bars">
             <div class="overall-bar">
                 <div class="overall-bar-label">🟢 Production Work</div>
@@ -962,6 +1000,12 @@ function navigateDate(direction) {
         case 'month':
             newDate.setMonth(newDate.getMonth() + direction);
             break;
+        case 'quarter':
+            newDate.setMonth(newDate.getMonth() + 3 * direction);
+            break;
+        case 'year':
+            newDate.setFullYear(newDate.getFullYear() + direction);
+            break;
     }
 
     currentDate = newDate;
@@ -985,6 +1029,13 @@ function updateCurrentDateDisplay() {
             month: 'short',
             day: 'numeric'
         });
+    } else if (range === 'year') {
+        const year = currentDate.getFullYear();
+        displayString = `${year}`;
+    } else if (range === 'quarter') {
+        const quarter = Math.floor(currentDate.getMonth() / 3) + 1;
+        const year = currentDate.getFullYear();
+        displayString = `Q${quarter} ${year}`;
     } else {
         const startDate = getDateRangeStart();
         const endDate = getDateRangeEnd();
