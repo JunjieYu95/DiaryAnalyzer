@@ -58,6 +58,10 @@ function setupEventListeners() {
     if (chartModeSelector) {
         chartModeSelector.addEventListener('change', onChartModeChange);
     }
+    const stackedChart = document.getElementById('stackedChart');
+    if (stackedChart) {
+        stackedChart.addEventListener('change', onChartModeChange);
+    }
 }
 
 // Check authentication status
@@ -1323,7 +1327,7 @@ function displayDailyTotals() {
                 },
                 y: {
                     display: true,
-                    stacked: true,
+                    stacked: document.getElementById('stackedChart').checked,
                     title: {
                         display: true,
                         text: 'Total Hours per Day',
