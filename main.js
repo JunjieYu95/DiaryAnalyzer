@@ -1278,7 +1278,7 @@ function displayDailyTotals() {
             plugins: {
                 title: {
                     display: true,
-                    text: 'Category Time Series - How You Shift Between Activities',
+                    text: 'Category Time Distribution Over Time',
                     font: {
                         size: 16,
                         weight: 'bold'
@@ -1323,9 +1323,10 @@ function displayDailyTotals() {
                 },
                 y: {
                     display: true,
+                    stacked: true,
                     title: {
                         display: true,
-                        text: 'Hours per Day',
+                        text: 'Total Hours per Day',
                         font: {
                             size: 14,
                             weight: 'bold'
