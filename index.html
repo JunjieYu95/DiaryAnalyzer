@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diary Analyzer - Web Application</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-content">
+                <h1>📊 Diary Analyzer</h1>
+                <p class="header-subtitle">Beautiful time series visualization for your Google Calendar diary entries</p>
+                <div class="controls">
+                    <select id="dateRange" class="date-selector">
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="quarter">This Quarter</option>
+                        <option value="year">This Year</option>
+                    </select>
+                    <select id="viewMode" class="view-selector">
+                        <option value="distribution">Distribution</option>
+                        <option value="timeline">Timeline</option>
+                        <option value="advanced">Advanced Analytics</option>
+                    </select>
+                    <button id="refreshBtn" class="refresh-btn">🔄 Refresh</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="app-main">
+            <div id="authSection" class="auth-section">
+                <div class="auth-content">
+                    <div class="auth-icon">🔐</div>
+                    <h2>Connect to Google Calendar</h2>
+                    <p>Sign in with your Google account to view and analyze your calendar diary entries</p>
+                    <div id="g_id_onload"
+                         data-client_id="YOUR_GOOGLE_CLIENT_ID_HERE"
+                         data-context="signin"
+                         data-ux_mode="popup"
+                         data-callback="handleCredentialResponse"
+                         data-auto_prompt="false">
+                    </div>
+                    <div class="g_id_signin"
+                         data-type="standard"
+                         data-shape="rectangular"
+                         data-theme="outline"
+                         data-text="signin_with"
+                         data-size="large"
+                         data-logo_alignment="left">
+                    </div>
+                    <p class="auth-note">We only request read-only access to your calendar data</p>
+                </div>
+            </div>
+
+            <div id="loadingSection" class="loading-section hidden">
+                <div class="loading-content">
+                    <div class="loading-spinner"></div>
+                    <h3>Loading your diary...</h3>
+                    <p>Fetching calendar data and preparing visualizations</p>
+                </div>
+            </div>
+
+            <div id="contentSection" class="content-section hidden">
+                <div class="date-navigation">
+                    <button id="prevDay" class="nav-btn">‹ Previous</button>
+                    <span id="currentDate" class="current-date"></span>
+                    <button id="nextDay" class="nav-btn">Next ›</button>
+                </div>
+
+                <div id="timelineContainer" class="timeline-container">
+                    <div id="timeline" class="timeline"></div>
+                </div>
+
+                <div id="distributionContainer" class="distribution-container hidden">
+                    <div class="distribution-header">
+                        <h3>Time Distribution by Calendar</h3>
+                        <p class="distribution-subtitle">How you spent your time today</p>
+                    </div>
+                    <div id="distributionChart" class="distribution-chart"></div>
+                    <div id="distributionStats" class="distribution-stats"></div>
+                </div>
+
+                <div id="advancedContainer" class="advanced-container hidden">
+                    <div class="advanced-header">
+                        <h3>Advanced Analytics</h3>
+                        <div class="chart-mode-selector">
+                            <label for="chartMode">View:</label>
+                            <select id="chartMode" class="chart-mode-dropdown">
+                                <option value="daily-totals">Daily Totals</option>
+                                <option value="timeline-flow">Timeline Flow</option>
+                            </select>
+                        </div>
+                        <div class="stacked-chart-selector">
+                            <input type="checkbox" id="stackedChart" name="stackedChart" checked>
+                            <label for="stackedChart" class="stacked-chart-label">Stacked</label>
+                        </div>
+                    </div>
+                    <div id="advancedCharts" class="advanced-charts">
+                        <canvas id="timeSeriesChart"></canvas>
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <span class="stat-label">Total Events</span>
+                        <span id="totalEvents" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Active Hours</span>
+                        <span id="activeHours" class="stat-value">0h</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Most Common</span>
+                        <span id="mostCommon" class="stat-value">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="errorSection" class="error-section hidden">
+                <div class="error-content">
+                    <div class="error-icon">⚠️</div>
+                    <h3>Something went wrong</h3>
+                    <p id="errorMessage">An error occurred while processing your request</p>
+                    <button id="retryBtn" class="retry-btn">Try Again</button>
+                </div>
+            </div>
+        </main>
+
+        <footer class="app-footer">
+            <p>&copy; 2024 Diary Analyzer. Made with ❤️ for productivity enthusiasts.</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="config.js" defer></script>
+    <script src="app.js" defer></script>
+</body>
+</html>

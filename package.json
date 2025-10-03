@@ -1,19 +1,25 @@
 {
-  "name": "dairy-analyzer-chrome-extension",
+  "name": "diary-analyzer-web-app",
   "version": "1.0.0",
-  "description": "A beautiful Chrome extension for visualizing Google Calendar diary entries in a clean timeline format",
-  "main": "popup.js",
+  "description": "A beautiful web application for visualizing Google Calendar diary entries in a clean timeline format",
+  "main": "index.html",
   "scripts": {
-    "icon-guide": "node convert-icons.js",
-    "test": "echo \"No tests specified\" && exit 0"
+    "start": "python -m http.server 8000",
+    "dev": "python -m http.server 8000",
+    "serve": "npx http-server -p 8000 -c-1",
+    "build": "echo 'No build step required for static web app'",
+    "test": "echo 'No tests specified' && exit 0",
+    "lint": "echo 'No linting configured' && exit 0",
+    "clean": "echo 'No cleanup required for static web app'"
   },
   "keywords": [
-    "chrome-extension",
+    "web-app",
     "google-calendar",
     "timeline",
     "diary",
     "visualization",
-    "productivity"
+    "productivity",
+    "oauth"
   ],
   "author": "Your Name",
   "license": "MIT",
@@ -28,4 +34,4 @@
     "url": "your-repository-url/issues"
   },
   "homepage": "your-repository-url#readme"
-} 
+}
