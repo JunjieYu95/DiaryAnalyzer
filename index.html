@@ -31,7 +31,6 @@
                 </div>
             </div>
         </header>
-
         <main class="app-main">
             <div id="authSection" class="auth-section">
                 <div class="auth-content">
@@ -39,7 +38,7 @@
                     <h2>Connect to Google Calendar</h2>
                     <p>Sign in with your Google account to view and analyze your calendar diary entries</p>
                     <div id="g_id_onload"
-                         data-client_id="YOUR_GOOGLE_CLIENT_ID_HERE"
+                         data-client_id="1025050561840-jedvsb3bce3gjvj5k081l5afia5h0mnq.apps.googleusercontent.com"
                          data-context="signin"
                          data-ux_mode="popup"
                          data-callback="handleCredentialResponse"
@@ -56,7 +55,6 @@
                     <p class="auth-note">We only request read-only access to your calendar data</p>
                 </div>
             </div>
-
             <div id="loadingSection" class="loading-section hidden">
                 <div class="loading-content">
                     <div class="loading-spinner"></div>
@@ -64,30 +62,26 @@
                     <p>Fetching calendar data and preparing visualizations</p>
                 </div>
             </div>
-
             <div id="contentSection" class="content-section hidden">
                 <div class="date-navigation">
                     <button id="prevDay" class="nav-btn">‹ Previous</button>
                     <span id="currentDate" class="current-date"></span>
                     <button id="nextDay" class="nav-btn">Next ›</button>
                 </div>
-
                 <div id="timelineContainer" class="timeline-container">
                     <div id="timeline" class="timeline"></div>
                 </div>
-
                 <div id="distributionContainer" class="distribution-container hidden">
                     <div class="distribution-header">
-                        <h3>Time Distribution by Calendar</h3>
+                        <h2>Time Distribution by Calendar</h2>
                         <p class="distribution-subtitle">How you spent your time today</p>
                     </div>
                     <div id="distributionChart" class="distribution-chart"></div>
                     <div id="distributionStats" class="distribution-stats"></div>
                 </div>
-
                 <div id="advancedContainer" class="advanced-container hidden">
                     <div class="advanced-header">
-                        <h3>Advanced Analytics</h3>
+                        <h2>Advanced Analytics</h2>
                         <div class="chart-mode-selector">
                             <label for="chartMode">View:</label>
                             <select id="chartMode" class="chart-mode-dropdown">
@@ -105,7 +99,6 @@
                         <canvas id="categoryChart"></canvas>
                     </div>
                 </div>
-
                 <div class="stats-container">
                     <div class="stat-card">
                         <span class="stat-label">Total Events</span>
@@ -121,24 +114,21 @@
                     </div>
                 </div>
             </div>
-
             <div id="errorSection" class="error-section hidden">
                 <div class="error-content">
                     <div class="error-icon">⚠️</div>
-                    <h3>Something went wrong</h3>
+                    <h2>Something went wrong</h2>
                     <p id="errorMessage">An error occurred while processing your request</p>
                     <button id="retryBtn" class="retry-btn">Try Again</button>
                 </div>
             </div>
         </main>
-
         <footer class="app-footer">
-            <p>&copy; 2024 Diary Analyzer. Made with ❤️ for productivity enthusiasts.</p>
+            © 2024 Diary Analyzer. Made with ❤️ for productivity enthusiasts.
         </footer>
     </div>
-
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="config.js" defer></script>
-    <script src="app.js" defer></script>
+    <script defer src="config.js"></script>
+    <script defer src="app.js"></script>
 </body>
 </html>
