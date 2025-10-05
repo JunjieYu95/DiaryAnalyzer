@@ -2,14 +2,19 @@
 let currentDate = new Date();
 let accessToken = null;
 let allEvents = [];
-let gapi = null;
+// gapi not needed - we use direct fetch calls to Google Calendar API
 
-// Configuration (will be loaded from config.js if available)
-const CONFIG = window.CONFIG || {
-    GOOGLE_CLIENT_ID: 'YOUR_GOOGLE_CLIENT_ID_HERE',
-    GOOGLE_API_KEY: 'YOUR_GOOGLE_API_KEY_HERE',
-    DEBUG: true
-};
+// Configuration is loaded from config.js
+// CONFIG will be available globally from config.js
+if (typeof CONFIG === 'undefined') {
+    console.error('❌ CONFIG not loaded! Check config.js');
+    // Fallback configuration
+    window.CONFIG = {
+        GOOGLE_CLIENT_ID: '1025050561840-jedvsb3bce3gjvj5k081l5afia5h0mnq.apps.googleusercontent.com',
+        GOOGLE_API_KEY: 'NOT_NEEDED_FOR_DIRECT_FETCH', // Not needed for direct API calls
+        DEBUG: true
+    };
+}
 
 // DOM elements
 const authSection = document.getElementById('authSection');
@@ -36,9 +41,23 @@ const errorMessage = document.getElementById('errorMessage');
 // Initialize the application
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Diary Analyzer Web App loaded!');
+    console.log('🔧 Debug mode enabled:', CONFIG.DEBUG);
+    console.log('🔑 Client ID configured:', CONFIG.GOOGLE_CLIENT_ID);
+    console.log('🌐 Current origin:', window.location.origin);
+    console.log('📱 User agent:', navigator.userAgent);
     
-    // Initialize Google API
-    await initializeGoogleAPI();
+    // Check if authentication completed before app loaded
+    if (window.authCompleted || window.globalAccessToken) {
+        console.log('✅ Authentication completed before app loaded, processing...');
+        accessToken = window.globalAccessToken || window.accessToken;
+        console.log('🔑 Using global access token:', !!accessToken);
+        showSection('loading');
+        await loadCalendarData();
+        return;
+    }
+    
+    // Skip Google API client initialization - we use direct fetch calls instead
+    console.log('⏭️ Skipping Google API client initialization - using direct fetch calls');
     
     // Setup event listeners
     setupEventListeners();
@@ -52,109 +71,295 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Initialize Google API
 async function initializeGoogleAPI() {
+    console.log('🔧 Starting Google API initialization...');
+    console.log('📊 GAPI available:', typeof gapi !== 'undefined');
+    console.log('🔑 API Key configured:', CONFIG.GOOGLE_API_KEY !== 'YOUR_GOOGLE_API_KEY_HERE');
+    
     return new Promise((resolve) => {
-        if (typeof gapi !== 'undefined') {
+        if (typeof gapi !== 'undefined' && gapi && gapi.load) {
+            console.log('📚 Loading Google API client...');
             gapi.load('client', async () => {
                 try {
+                    console.log('⚙️ Initializing Google API client...');
                     await gapi.client.init({
                         apiKey: CONFIG.GOOGLE_API_KEY,
                         discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
                     });
-                    console.log('✅ Google API initialized');
+                    console.log('✅ Google API initialized successfully');
                     resolve();
                 } catch (error) {
-                    console.error('❌ Error initializing Google API:', error);
-                    resolve();
+                    console.error('❌ Failed to initialize Google API:', error);
+                    console.error('🔍 Error details:', error.message, error.stack);
+                    resolve(); // Continue even if API init fails
                 }
             });
         } else {
-            console.warn('⚠️ Google API not loaded');
-            resolve();
+            console.warn('⚠️ Google API not loaded yet, will retry...');
+            console.log('🔍 gapi type:', typeof gapi);
+            console.log('🔍 gapi exists:', !!gapi);
+            console.log('🔍 gapi.load exists:', gapi && typeof gapi.load);
+            setTimeout(() => initializeGoogleAPI().then(resolve), 1000);
         }
     });
 }
 
 // Setup event listeners
 function setupEventListeners() {
-    refreshBtn.addEventListener('click', refreshData);
-    retryBtn.addEventListener('click', refreshData);
-    dateRange.addEventListener('change', onDateRangeChange);
-    viewMode.addEventListener('change', onViewModeChange);
-    prevDayBtn.addEventListener('click', () => navigateDate(-1));
-    nextDayBtn.addEventListener('click', () => navigateDate(1));
+    console.log('🔧 Setting up event listeners...');
+    
+    // Debug: Check if elements exist
+    console.log('🔍 Element check:');
+    console.log('  - refreshBtn:', !!refreshBtn);
+    console.log('  - retryBtn:', !!retryBtn);
+    console.log('  - dateRange:', !!dateRange);
+    console.log('  - viewMode:', !!viewMode);
+    console.log('  - prevDayBtn:', !!prevDayBtn);
+    console.log('  - nextDayBtn:', !!nextDayBtn);
+    
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', refreshData);
+        console.log('✅ Refresh button listener added');
+    } else {
+        console.error('❌ Refresh button not found');
+    }
+    
+    if (retryBtn) {
+        retryBtn.addEventListener('click', refreshData);
+        console.log('✅ Retry button listener added');
+    } else {
+        console.error('❌ Retry button not found');
+    }
+    
+    if (dateRange) {
+        dateRange.addEventListener('change', onDateRangeChange);
+        console.log('✅ Date range listener added');
+        
+        // Test if the element is working
+        dateRange.addEventListener('change', function() {
+            console.log('🔔 Date range change event fired! Value:', this.value);
+        });
+    } else {
+        console.error('❌ Date range element not found');
+    }
+    
+    if (viewMode) {
+        viewMode.addEventListener('change', onViewModeChange);
+        console.log('✅ View mode listener added');
+        
+        // Test if the element is working
+        viewMode.addEventListener('change', function() {
+            console.log('🔔 View mode change event fired! Value:', this.value);
+        });
+    } else {
+        console.error('❌ View mode element not found');
+    }
+    
+    if (prevDayBtn) {
+        prevDayBtn.addEventListener('click', () => navigateDate(-1));
+        console.log('✅ Previous day button listener added');
+    } else {
+        console.error('❌ Previous day button not found');
+    }
+    
+    if (nextDayBtn) {
+        nextDayBtn.addEventListener('click', () => navigateDate(1));
+        console.log('✅ Next day button listener added');
+    } else {
+        console.error('❌ Next day button not found');
+    }
     
     // Chart mode selector for advanced analytics
     const chartModeSelector = document.getElementById('chartMode');
     if (chartModeSelector) {
         chartModeSelector.addEventListener('change', onChartModeChange);
+        console.log('✅ Chart mode selector listener added');
+    } else {
+        console.log('⚠️ Chart mode selector not found (this is OK if not on advanced view)');
     }
+    
     const stackedChart = document.getElementById('stackedChart');
     if (stackedChart) {
         stackedChart.addEventListener('change', onChartModeChange);
+        console.log('✅ Stacked chart selector listener added');
+    } else {
+        console.log('⚠️ Stacked chart selector not found (this is OK if not on advanced view)');
     }
+    
+    console.log('🔧 Event listeners setup complete');
 }
 
-// Handle Google Sign-In response
-function handleCredentialResponse(response) {
-    console.log('🔐 Google Sign-In response received');
-    
-    if (response.credential) {
-        // Extract the JWT token
-        const token = response.credential;
-        
-        // For now, we'll use a simplified approach
-        // In a production app, you'd verify the JWT server-side
-        accessToken = token;
-        
-        // Store token in localStorage
-        localStorage.setItem('googleToken', token);
-        
-        console.log('✅ Authentication successful');
-        showSection('loading');
-        loadCalendarData();
-    } else {
-        console.error('❌ Authentication failed');
-        showError('Authentication failed. Please try again.');
-    }
-}
+// Handle Google Sign-In response - callback is now defined in HTML
+// This function is kept for compatibility but the actual callback is in index.html
 
 // Check authentication status
 async function checkAuthStatus() {
+    console.log('🔍 Checking authentication status...');
     try {
         const storedToken = localStorage.getItem('googleToken');
-        console.log('🔍 Checking stored token:', !!storedToken);
+        console.log('💾 Stored token exists:', !!storedToken);
+        console.log('💾 Stored token length:', storedToken ? storedToken.length : 0);
 
-        if (storedToken) {
+        // FORCE RE-SIGNIN FOR TESTING - Remove this line when ready for production
+        const forceReSignin = true; // Set to false to allow stored tokens
+        
+        if (storedToken && !forceReSignin) {
+            console.log('✅ Found stored token, checking validity...');
             accessToken = storedToken;
-            console.log('✅ Using stored token');
             showSection('loading');
             await loadCalendarData();
         } else {
-            console.log('❌ No stored token, showing auth');
+            if (forceReSignin) {
+                console.log('🔄 Force re-signin enabled for testing - clearing stored token');
+                localStorage.removeItem('googleToken');
+                window.globalAccessToken = null;
+                window.accessToken = null;
+            }
+            console.log('🔍 No stored token found, showing auth section');
             showSection('auth');
+            
+            // Add debug info for Google Sign-In setup
+            setTimeout(() => {
+                debugGoogleSignInSetup();
+            }, 1000);
         }
     } catch (error) {
         console.error('❌ Error checking auth status:', error);
+        console.error('🔍 Error details:', error.message, error.stack);
         showSection('auth');
     }
 }
 
+// Debug function to check Google Sign-In setup
+function debugGoogleSignInSetup() {
+    console.log('🔧 === GOOGLE SIGN-IN DEBUG INFO ===');
+    console.log('🌐 Current URL:', window.location.href);
+    console.log('🌐 Origin:', window.location.origin);
+    console.log('🔑 Client ID from CONFIG:', CONFIG.GOOGLE_CLIENT_ID);
+    console.log('🔑 Client ID from HTML element:');
+    
+    const gIdOnload = document.getElementById('g_id_onload');
+    if (gIdOnload) {
+        console.log('📋 g_id_onload element found:', gIdOnload);
+        console.log('📋 data-client_id:', gIdOnload.getAttribute('data-client_id'));
+        console.log('📋 data-callback:', gIdOnload.getAttribute('data-callback'));
+        console.log('📋 data-ux_mode:', gIdOnload.getAttribute('data-ux_mode'));
+    } else {
+        console.error('❌ g_id_onload element not found!');
+    }
+    
+    const gIdSignin = document.querySelector('.g_id_signin');
+    if (gIdSignin) {
+        console.log('📋 g_id_signin element found:', gIdSignin);
+    } else {
+        console.error('❌ g_id_signin element not found!');
+    }
+    
+    console.log('🔧 Callback function available:', typeof window.handleCredentialResponse);
+    console.log('📚 Google Identity Services loaded:', typeof google !== 'undefined');
+    
+    if (typeof google !== 'undefined') {
+        console.log('📚 Google object keys:', Object.keys(google));
+        if (google.accounts) {
+            console.log('📚 Google.accounts available:', !!google.accounts);
+            console.log('📚 Google.accounts.id available:', !!google.accounts.id);
+        }
+    }
+    
+    console.log('🔧 === END DEBUG INFO ===');
+}
+
+// Global debug function for browser console
+window.debugAuth = function() {
+    console.log('🔧 === MANUAL DEBUG TRIGGER ===');
+    debugGoogleSignInSetup();
+    
+    // Additional checks
+    console.log('🔧 === ADDITIONAL CHECKS ===');
+    console.log('🌐 Window.location:', window.location.href);
+    console.log('🔑 CONFIG object:', CONFIG);
+    console.log('📱 Local storage:', {
+        googleToken: localStorage.getItem('googleToken') ? 'EXISTS' : 'NOT_FOUND',
+        length: localStorage.getItem('googleToken')?.length || 0
+    });
+    
+    // Check if Google Sign-In button is clickable
+    const signinBtn = document.querySelector('.g_id_signin');
+    if (signinBtn) {
+        console.log('🔘 Sign-in button found and clickable:', !signinBtn.disabled);
+        console.log('🔘 Button parent element:', signinBtn.parentElement);
+    }
+    
+    console.log('🔧 === END MANUAL DEBUG ===');
+}
+
+// Global debug function for testing event listeners
+window.testEventListeners = function() {
+    console.log('🧪 === TESTING EVENT LISTENERS ===');
+    
+    // Test date range change
+    console.log('🧪 Testing date range change...');
+    const dateRange = document.getElementById('dateRange');
+    if (dateRange) {
+        console.log('📅 Current date range value:', dateRange.value);
+        console.log('📅 Available options:', Array.from(dateRange.options).map(opt => opt.value));
+        
+        // Try to trigger change
+        const originalValue = dateRange.value;
+        dateRange.value = originalValue === 'today' ? 'week' : 'today';
+        dateRange.dispatchEvent(new Event('change'));
+        console.log('📅 Triggered change event, new value:', dateRange.value);
+        
+        // Reset
+        dateRange.value = originalValue;
+    } else {
+        console.error('❌ Date range element not found');
+    }
+    
+    // Test view mode change
+    console.log('🧪 Testing view mode change...');
+    const viewMode = document.getElementById('viewMode');
+    if (viewMode) {
+        console.log('👁️ Current view mode value:', viewMode.value);
+        console.log('👁️ Available options:', Array.from(viewMode.options).map(opt => opt.value));
+        
+        // Try to trigger change
+        const originalValue = viewMode.value;
+        viewMode.value = originalValue === 'distribution' ? 'timeline' : 'distribution';
+        viewMode.dispatchEvent(new Event('change'));
+        console.log('👁️ Triggered change event, new value:', viewMode.value);
+        
+        // Reset
+        viewMode.value = originalValue;
+    } else {
+        console.error('❌ View mode element not found');
+    }
+    
+    console.log('🧪 === END EVENT LISTENER TEST ===');
+}
+
 // Load calendar data from Google Calendar API
-async function loadCalendarData() {
+// Make loadCalendarData globally available
+window.loadCalendarData = async function loadCalendarData() {
     try {
         console.log('📅 Loading calendar data...');
         console.log('🔑 Access token exists:', !!accessToken);
+        console.log('🔑 Access token from localStorage:', !!localStorage.getItem('googleToken'));
+        console.log('🔑 Global access token:', !!window.globalAccessToken);
+        
+        // Try to get token from multiple sources
+        if (!accessToken) {
+            accessToken = window.globalAccessToken || localStorage.getItem('googleToken');
+            console.log('🔑 Retrieved access token from alternative source:', !!accessToken);
+        }
 
         // Validate token
         if (!accessToken) {
             throw new Error('No access token available. Please sign in again.');
         }
 
-        // For this demo, we'll use a mock approach since we need proper OAuth setup
-        // In a real implementation, you'd use the Google Calendar API with proper OAuth
-        
-        // Mock data for demonstration
-        allEvents = generateMockEvents();
+        // Fetch real calendar data from Google Calendar API
+        console.log('📅 Fetching real calendar data from Google Calendar API...');
+        allEvents = await fetchGoogleCalendarEvents();
         
         console.log(`📊 Total events loaded: ${allEvents.length}`);
 
@@ -164,7 +369,118 @@ async function loadCalendarData() {
         
     } catch (error) {
         console.error('❌ Error loading calendar data:', error);
-        showError(`Failed to load calendar data: ${error.message}`);
+        
+        let errorMessage = `Failed to load calendar data: ${error.message}`;
+        
+        // Add specific instructions for OAuth origin mismatch
+        if (error.message.includes('401 Unauthorized')) {
+            errorMessage += `
+
+🔧 TO FIX THIS:
+1. Go to Google Cloud Console: https://console.cloud.google.com/
+2. Navigate to: APIs & Services → Credentials
+3. Find your OAuth 2.0 Client ID: 1025050561840-jedvsb3bce3gjvj5k081l5afia5h0mnq
+4. Click Edit (pencil icon)
+5. Add to "Authorized JavaScript origins":
+   http://localhost:8000
+6. Save and wait 2-3 minutes
+7. Refresh this page and try again`;
+        }
+        
+        showError(errorMessage);
+    }
+}
+
+// Fetch real calendar events from Google Calendar API
+async function fetchGoogleCalendarEvents() {
+    try {
+        console.log('🔍 Fetching calendar list...');
+        
+        // Get calendar list
+        const calendarListResponse = await fetch(
+            'https://www.googleapis.com/calendar/v3/users/me/calendarList',
+            {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        if (!calendarListResponse.ok) {
+            if (calendarListResponse.status === 401) {
+                throw new Error(`401 Unauthorized: OAuth origin mismatch. Please add 'http://localhost:8000' to Google Cloud Console OAuth settings. Status: ${calendarListResponse.status}`);
+            }
+            throw new Error(`Failed to fetch calendars: ${calendarListResponse.status}`);
+        }
+
+        const calendarList = await calendarListResponse.json();
+        console.log('📅 Available calendars:', calendarList.items?.map(cal => cal.summary));
+
+        // Filter for relevant calendars (primary + diary calendars)
+        const relevantCalendars = calendarList.items?.filter(calendar =>
+            calendar.id === 'primary' ||
+            calendar.summary?.toLowerCase().includes('diary') ||
+            calendar.summary?.toLowerCase().includes('actual')
+        ) || [];
+
+        console.log('📅 Relevant calendars:', relevantCalendars.map(cal => cal.summary));
+
+        const timeMin = getDateRangeStart();
+        const timeMax = getDateRangeEnd();
+
+        // Fetch events from all relevant calendars
+        let allEvents = [];
+
+        for (const calendar of relevantCalendars) {
+            console.log(`📅 Fetching events from: ${calendar.summary}`);
+
+            const apiUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events?` +
+                `timeMin=${timeMin.toISOString()}&` +
+                `timeMax=${timeMax.toISOString()}&` +
+                `singleEvents=true&` +
+                `orderBy=startTime&` +
+                `maxResults=2500`;
+
+            const response = await fetch(apiUrl, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const events = data.items || [];
+                console.log(`📅 Found ${events.length} events in ${calendar.summary}`);
+
+                // Add calendar name to each event for reference
+                events.forEach(event => {
+                    event.calendarName = calendar.summary;
+                });
+
+                allEvents = allEvents.concat(events);
+            } else {
+                console.warn(`⚠️ Failed to fetch events from ${calendar.summary}: ${response.status}`);
+            }
+        }
+
+        // Sort all events by start time
+        allEvents.sort((a, b) => {
+            const aTime = new Date(a.start.dateTime || a.start.date);
+            const bTime = new Date(b.start.dateTime || b.start.date);
+            return aTime - bTime;
+        });
+
+        console.log(`📊 Total events loaded: ${allEvents.length}`);
+        return allEvents;
+
+    } catch (error) {
+        console.error('❌ Error fetching calendar events:', error);
+        
+        // NO MOCK DATA - Show error instead
+        console.error('🚫 API failed - will show error instead of mock data');
+        throw error; // Re-throw to show error to user
     }
 }
 
@@ -969,14 +1285,18 @@ function updateCurrentDateDisplay() {
 
 // Handle date range change
 function onDateRangeChange() {
+    console.log('📅 Date range changed to:', dateRange.value);
     if (accessToken) {
         showSection('loading');
         loadCalendarData();
+    } else {
+        console.warn('⚠️ No access token available for date range change');
     }
 }
 
 // Handle view mode change
 function onViewModeChange() {
+    console.log('👁️ View mode changed to:', viewMode.value);
     displayCurrentView();
 }
 

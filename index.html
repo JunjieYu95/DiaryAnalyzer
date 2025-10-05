@@ -129,6 +129,59 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script defer src="config.js"></script>
+    
+    <!-- Google Sign-In callback function - must be available immediately -->
+    <script>
+        // Global callback function for Google Sign-In
+        window.handleCredentialResponse = function(response) {
+            console.log('🔐 Google Sign-In response received!');
+            console.log('📋 Response type:', typeof response);
+            console.log('📋 Response keys:', response ? Object.keys(response) : 'null');
+            console.log('📋 Full response:', response);
+            
+            if (response && response.credential) {
+                console.log('✅ Credential found in response');
+                const token = response.credential;
+                console.log('🔑 Token length:', token.length);
+                console.log('🔑 Token preview:', token.substring(0, 50) + '...');
+                
+                // Store token in localStorage
+                localStorage.setItem('googleToken', token);
+                console.log('💾 Token stored in localStorage');
+                
+                // Set global access token for app.js to use
+                window.accessToken = token;
+                window.globalAccessToken = token;
+                
+                console.log('✅ Authentication successful - transitioning to loading...');
+                
+                // Show loading section
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('loadingSection').classList.remove('hidden');
+                
+                // Load calendar data
+                if (window.loadCalendarData && typeof window.loadCalendarData === 'function') {
+                    console.log('📅 Starting to load calendar data...');
+                    window.loadCalendarData();
+                } else {
+                    console.log('📅 loadCalendarData not available yet, will be called when app.js loads');
+                    // Set a flag that we need to load data
+                    window.authCompleted = true;
+                }
+            } else {
+                console.error('❌ Authentication failed - no credential in response');
+                console.error('🔍 Response structure:', response);
+                
+                // Show error
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('errorSection').classList.remove('hidden');
+                document.getElementById('errorMessage').textContent = 'Authentication failed. Please try again.';
+            }
+        };
+        
+        console.log('✅ Google Sign-In callback function registered globally');
+    </script>
+    
     <script defer src="app.js"></script>
 </body>
 </html>
