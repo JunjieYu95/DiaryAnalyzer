@@ -1,19 +1,21 @@
 // Global variables
 let currentDate = new Date();
-let accessToken = null;
+// accessToken is set by index.html OAuth flow - use window.accessToken
 let allEvents = [];
 // gapi not needed - we use direct fetch calls to Google Calendar API
+
+// Helper to get access token (works with both local and window scope)
+function getAccessToken() {
+    return window.accessToken || window.globalAccessToken || null;
+}
 
 // Configuration is loaded from config.js
 // CONFIG will be available globally from config.js
 if (typeof CONFIG === 'undefined') {
-    console.error('❌ CONFIG not loaded! Check config.js');
-    // Fallback configuration
-    window.CONFIG = {
-        GOOGLE_CLIENT_ID: '1025050561840-jedvsb3bce3gjvj5k081l5afia5h0mnq.apps.googleusercontent.com',
-        GOOGLE_API_KEY: 'NOT_NEEDED_FOR_DIRECT_FETCH', // Not needed for direct API calls
-        DEBUG: true
-    };
+    console.error('❌ CONFIG not loaded! Make sure config.js exists');
+    console.error('❌ Copy config.example.js to config.js and add your Google Client ID');
+    alert('Configuration error: Please create config.js from config.example.js');
+    throw new Error('CONFIG not loaded. See console for details.');
 }
 
 // DOM elements
@@ -342,15 +344,11 @@ window.testEventListeners = function() {
 window.loadCalendarData = async function loadCalendarData() {
     try {
         console.log('📅 Loading calendar data...');
-        console.log('🔑 Access token exists:', !!accessToken);
-        console.log('🔑 Access token from localStorage:', !!localStorage.getItem('googleToken'));
-        console.log('🔑 Global access token:', !!window.globalAccessToken);
         
-        // Try to get token from multiple sources
-        if (!accessToken) {
-            accessToken = window.globalAccessToken || localStorage.getItem('googleToken');
-            console.log('🔑 Retrieved access token from alternative source:', !!accessToken);
-        }
+        // Get access token using helper
+        const accessToken = getAccessToken();
+        console.log('🔑 Access token exists:', !!accessToken);
+        console.log('🔑 Token length:', accessToken ? accessToken.length : 0);
 
         // Validate token
         if (!accessToken) {
@@ -359,7 +357,7 @@ window.loadCalendarData = async function loadCalendarData() {
 
         // Fetch real calendar data from Google Calendar API
         console.log('📅 Fetching real calendar data from Google Calendar API...');
-        allEvents = await fetchGoogleCalendarEvents();
+        allEvents = await fetchGoogleCalendarEvents(accessToken);
         
         console.log(`📊 Total events loaded: ${allEvents.length}`);
 
@@ -392,9 +390,10 @@ window.loadCalendarData = async function loadCalendarData() {
 }
 
 // Fetch real calendar events from Google Calendar API
-async function fetchGoogleCalendarEvents() {
+async function fetchGoogleCalendarEvents(accessToken) {
     try {
         console.log('🔍 Fetching calendar list...');
+        console.log('🔑 Using access token (length):', accessToken ? accessToken.length : 0);
         
         // Get calendar list
         const calendarListResponse = await fetch(
@@ -1246,7 +1245,8 @@ function navigateDate(direction) {
     updateCurrentDateDisplay();
 
     // Reload data for new date range
-    if (accessToken) {
+    const token = getAccessToken();
+    if (token) {
         showSection('loading');
         loadCalendarData();
     }
@@ -1286,7 +1286,8 @@ function updateCurrentDateDisplay() {
 // Handle date range change
 function onDateRangeChange() {
     console.log('📅 Date range changed to:', dateRange.value);
-    if (accessToken) {
+    const token = getAccessToken();
+    if (token) {
         showSection('loading');
         loadCalendarData();
     } else {

@@ -1,52 +1,56 @@
-# Sensitive Configuration Files
-manifest.json
-private/
-*.secret
-*.key
-*.env
+# Configuration with secrets
+# Note: config.js is safe to commit (Client ID is public, not a secret)
 
-# OAuth and API Keys
-*client_secret*
-*api_key*
-*oauth*
+# Logs
+*.log
+frontend.log
+backend.log
 
-# Node.js
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Archives
+archive_docs/
+archive_files/
+
+# Node modules (if using Node.js)
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+package-lock.json
 
-# Chrome Extension Packaging
-*.crx
-*.pem
-web-store-upload.zip
+# Build outputs
+dist/
+build/
+.vercel/
+.netlify/
 
-# Development Files
+# OS files
 .DS_Store
+Thumbs.db
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
-# Logs
-logs/
-*.log
+# Temporary files
+*.tmp
+*.temp
+.cache/
 
-# Temporary Files
-tmp/
-temp/
-.tmp/
+# Private files
+private/
 
-# Debug Files
-debug.log
-console.log
+# Supabase (if using local development)
+supabase/.branches
+supabase/.temp
 
-# Extension Store Assets
-store-assets/
-screenshots-internal/
+# Test files
+tests/
 
-# Backup Files
-*.backup
+# Backup files
+*-backup-*.html
 *.bak
-*.orig 
+.vercel

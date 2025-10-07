@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Diary Analyzer - Web Application</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="https://apis.google.com/js/api.js"></script>
+    <!-- Load Google API Client Library for proper OAuth -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -31,157 +31,295 @@
                 </div>
             </div>
         </header>
+
         <main class="app-main">
-            <div id="authSection" class="auth-section">
-                <div class="auth-content">
-                    <div class="auth-icon">🔐</div>
-                    <h2>Connect to Google Calendar</h2>
+            <!-- Auth Section -->
+            <section id="authSection" class="auth-section">
+                <div class="auth-card">
+                    <h2>📊 Welcome to Diary Analyzer</h2>
                     <p>Sign in with your Google account to view and analyze your calendar diary entries</p>
-                    <div id="g_id_onload"
-                         data-client_id="1025050561840-jedvsb3bce3gjvj5k081l5afia5h0mnq.apps.googleusercontent.com"
-                         data-context="signin"
-                         data-ux_mode="popup"
-                         data-callback="handleCredentialResponse"
-                         data-auto_prompt="false">
-                    </div>
-                    <div class="g_id_signin"
-                         data-type="standard"
-                         data-shape="rectangular"
-                         data-theme="outline"
-                         data-text="signin_with"
-                         data-size="large"
-                         data-logo_alignment="left">
-                    </div>
+                    
+                    <!-- Custom Sign-In Button with OAuth Token Request -->
+                    <div id="buttonDiv"></div>
+                    
                     <p class="auth-note">We only request read-only access to your calendar data</p>
                 </div>
-            </div>
-            <div id="loadingSection" class="loading-section hidden">
-                <div class="loading-content">
-                    <div class="loading-spinner"></div>
-                    <h3>Loading your diary...</h3>
-                    <p>Fetching calendar data and preparing visualizations</p>
+            </section>
+
+            <!-- Loading Section -->
+            <section id="loadingSection" class="loading-section hidden">
+                <div class="loading-spinner"></div>
+                <p id="loadingMessage">Loading your calendar data...</p>
+                <p id="loadingDetails" style="font-size: 0.85rem; color: #888; margin-top: 0.5rem;"></p>
+            </section>
+
+            <!-- Error Section -->
+            <section id="errorSection" class="error-section hidden">
+                <div class="error-card">
+                    <h2>⚠️ Something went wrong</h2>
+                    <p id="errorMessage"></p>
+                    <button id="retryBtn" class="retry-btn">Try Again</button>
                 </div>
-            </div>
-            <div id="contentSection" class="content-section hidden">
+            </section>
+
+            <!-- Content Section -->
+            <section id="contentSection" class="content-section hidden">
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <h3>Total Events</h3>
+                        <p id="totalEvents" class="stat-value">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Active Hours</h3>
+                        <p id="activeHours" class="stat-value">0h 0m</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Most Common</h3>
+                        <p id="mostCommon" class="stat-value">-</p>
+                    </div>
+                </div>
+
+                <!-- Navigation -->
                 <div class="date-navigation">
-                    <button id="prevDay" class="nav-btn">‹ Previous</button>
-                    <span id="currentDate" class="current-date"></span>
-                    <button id="nextDay" class="nav-btn">Next ›</button>
+                    <button id="prevDay" class="nav-btn">← Prev</button>
+                    <span id="currentDate" class="current-date">Today</span>
+                    <button id="nextDay" class="nav-btn">Next →</button>
                 </div>
-                <div id="timelineContainer" class="timeline-container">
+
+                <!-- Timeline View -->
+                <div id="timelineContainer" class="timeline-container hidden">
+                    <h3>Timeline</h3>
                     <div id="timeline" class="timeline"></div>
                 </div>
-                <div id="distributionContainer" class="distribution-container hidden">
-                    <div class="distribution-header">
-                        <h2>Time Distribution by Calendar</h2>
-                        <p class="distribution-subtitle">How you spent your time today</p>
-                    </div>
+
+                <!-- Distribution View -->
+                <div id="distributionContainer" class="distribution-container">
+                    <h3>Time Distribution</h3>
+                    <p class="distribution-subtitle">Daily time distribution by calendar</p>
                     <div id="distributionChart" class="distribution-chart"></div>
                     <div id="distributionStats" class="distribution-stats"></div>
                 </div>
+
+                <!-- Advanced Analytics View -->
                 <div id="advancedContainer" class="advanced-container hidden">
-                    <div class="advanced-header">
-                        <h2>Advanced Analytics</h2>
-                        <div class="chart-mode-selector">
-                            <label for="chartMode">View:</label>
-                            <select id="chartMode" class="chart-mode-dropdown">
-                                <option value="daily-totals">Daily Totals</option>
-                                <option value="timeline-flow">Timeline Flow</option>
-                            </select>
-                        </div>
-                        <div class="stacked-chart-selector">
-                            <input type="checkbox" id="stackedChart" name="stackedChart" checked>
-                            <label for="stackedChart" class="stacked-chart-label">Stacked</label>
-                        </div>
+                    <h3>Advanced Analytics</h3>
+                    <div class="chart-controls">
+                        <label>
+                            <input type="checkbox" id="stackedChart"> Stacked View
+                        </label>
+                        <select id="chartMode">
+                            <option value="daily-totals">Daily Totals</option>
+                            <option value="timeline-flow">Timeline Flow</option>
+                        </select>
                     </div>
                     <div id="advancedCharts" class="advanced-charts">
                         <canvas id="timeSeriesChart"></canvas>
                         <canvas id="categoryChart"></canvas>
                     </div>
                 </div>
-                <div class="stats-container">
-                    <div class="stat-card">
-                        <span class="stat-label">Total Events</span>
-                        <span id="totalEvents" class="stat-value">0</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-label">Active Hours</span>
-                        <span id="activeHours" class="stat-value">0h</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-label">Most Common</span>
-                        <span id="mostCommon" class="stat-value">-</span>
-                    </div>
-                </div>
-            </div>
-            <div id="errorSection" class="error-section hidden">
-                <div class="error-content">
-                    <div class="error-icon">⚠️</div>
-                    <h2>Something went wrong</h2>
-                    <p id="errorMessage">An error occurred while processing your request</p>
-                    <button id="retryBtn" class="retry-btn">Try Again</button>
-                </div>
-            </div>
+            </section>
         </main>
         <footer class="app-footer">
             © 2024 Diary Analyzer. Made with ❤️ for productivity enthusiasts.
         </footer>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script defer src="config.js"></script>
+    <!-- config.js must load BEFORE app.js, so no defer -->
+    <script src="config.js"></script>
     
-    <!-- Google Sign-In callback function - must be available immediately -->
+    <!-- Google OAuth Setup - REQUEST ACCESS TOKEN NOT ID TOKEN -->
     <script>
-        // Global callback function for Google Sign-In
-        window.handleCredentialResponse = function(response) {
-            console.log('🔐 Google Sign-In response received!');
-            console.log('📋 Response type:', typeof response);
-            console.log('📋 Response keys:', response ? Object.keys(response) : 'null');
-            console.log('📋 Full response:', response);
+        let tokenClient;
+        // Note: accessToken is declared in app.js, we'll just use window.accessToken
+        
+        // Helper function to update loading message with details
+        function updateLoadingMessage(mainMessage, details = '') {
+            const loadingMsg = document.getElementById('loadingMessage');
+            const loadingDetails = document.getElementById('loadingDetails');
+            if (loadingMsg) loadingMsg.textContent = mainMessage;
+            if (loadingDetails) loadingDetails.textContent = details;
+            console.log('📢', mainMessage, details ? `(${details})` : '');
+        }
+        
+        // Wait for Google API to load completely
+        function initializeGoogleAuth() {
+            console.log('🔧 Initializing Google OAuth...');
             
-            if (response && response.credential) {
-                console.log('✅ Credential found in response');
-                const token = response.credential;
-                console.log('🔑 Token length:', token.length);
-                console.log('🔑 Token preview:', token.substring(0, 50) + '...');
+            // Check if google object exists
+            if (typeof google === 'undefined') {
+                console.log('⏳ Google API not loaded yet, retrying...');
+                setTimeout(initializeGoogleAuth, 100);
+                return;
+            }
+            
+            console.log('✅ Google API loaded, setting up OAuth...');
+            
+            // Initialize the Token Client for OAuth 2.0
+            // Client ID comes from config.js - never hardcode credentials
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CONFIG.GOOGLE_CLIENT_ID,
+                scope: 'https://www.googleapis.com/auth/calendar.readonly',
+                callback: (response) => {
+                    console.log('🔐 OAuth Token Response:', response);
+                    
+                    if (response.error) {
+                        console.error('❌ OAuth Error:', response.error);
+                        document.getElementById('errorMessage').textContent = `Authentication failed: ${response.error}`;
+                        document.getElementById('authSection').classList.add('hidden');
+                        document.getElementById('errorSection').classList.remove('hidden');
+                        return;
+                    }
+                    
+                    if (response.access_token) {
+                        console.log('✅ Got ACCESS TOKEN (length:', response.access_token.length, ')');
+                        console.log('🔑 Token preview:', response.access_token.substring(0, 30) + '...');
+                        
+                        // THIS IS A REAL ACCESS TOKEN - IT WORKS WITH APIs!
+                        window.accessToken = response.access_token;
+                        window.globalAccessToken = response.access_token;
+                        
+                        // Store token
+                        localStorage.setItem('googleToken', response.access_token);
+                        console.log('💾 Access token stored');
+                        
+                        // Show loading and load data
+                        document.getElementById('authSection').classList.add('hidden');
+                        document.getElementById('loadingSection').classList.remove('hidden');
+                        updateLoadingMessage('Authentication successful!', 'Initializing calendar API...');
+                        
+                        // Load calendar data with retry logic
+                        const tryLoadCalendarData = (attempts = 0, maxAttempts = 10) => {
+                            console.log(`🔄 Attempt ${attempts + 1}/${maxAttempts} to load calendar data...`);
+                            
+                            if (window.loadCalendarData && typeof window.loadCalendarData === 'function') {
+                                console.log('✅ Found loadCalendarData function, calling it...');
+                                updateLoadingMessage('Loading calendar data...', 'Fetching events from Google Calendar...');
+                                try {
+                                    window.loadCalendarData();
+                                } catch (error) {
+                                    console.error('❌ Error calling loadCalendarData:', error);
+                                    document.getElementById('errorMessage').textContent = `Failed to load calendar data: ${error.message}`;
+                                    document.getElementById('loadingSection').classList.add('hidden');
+                                    document.getElementById('errorSection').classList.remove('hidden');
+                                }
+                            } else if (attempts < maxAttempts) {
+                                const nextAttempt = attempts + 1;
+                                const waitTime = 500;
+                                console.log(`⏳ loadCalendarData not ready yet, retrying in ${waitTime}ms... (${nextAttempt}/${maxAttempts})`);
+                                updateLoadingMessage('Loading calendar data...', `Waiting for app.js... (${nextAttempt}/${maxAttempts})`);
+                                setTimeout(() => tryLoadCalendarData(nextAttempt, maxAttempts), waitTime);
+                            } else {
+                                console.error('❌ Failed to load app.js after', maxAttempts, 'attempts');
+                                document.getElementById('errorMessage').textContent = 'Failed to load app.js. Please refresh the page.';
+                                document.getElementById('loadingSection').classList.add('hidden');
+                                document.getElementById('errorSection').classList.remove('hidden');
+                            }
+                        };
+                        
+                        tryLoadCalendarData();
+                    }
+                },
+            });
+            
+            console.log('🎨 Rendering sign-in button...');
+            
+            // Create a custom button (Google's renderButton only works with ID tokens)
+            const buttonDiv = document.getElementById("buttonDiv");
+            buttonDiv.innerHTML = `
+                <button id="customGoogleBtn" style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 12px;
+                    background: white;
+                    border: 1px solid #dadce0;
+                    border-radius: 4px;
+                    padding: 10px 12px;
+                    font-family: 'Google Sans', Roboto, Arial, sans-serif;
+                    font-size: 14px;
+                    font-weight: 500;
+                    color: #3c4043;
+                    cursor: pointer;
+                    transition: background-color 0.3s, box-shadow 0.3s;
+                    min-width: 200px;
+                " onmouseover="this.style.backgroundColor='#f8f9fa'; this.style.boxShadow='0 1px 2px 0 rgba(60,64,67,.30), 0 1px 3px 1px rgba(60,64,67,.15)';" 
+                   onmouseout="this.style.backgroundColor='white'; this.style.boxShadow='none';">
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                        <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
+                        <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2.01a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/>
+                        <path fill="#FBBC05" d="M4.5 10.52A4.8 4.8 0 0 1 4.5 7.48V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/>
+                        <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/>
+                    </svg>
+                    Sign in with Google
+                </button>
+            `;
+            
+            document.getElementById("customGoogleBtn").addEventListener('click', () => {
+                console.log('🖱️ Sign-in button clicked - requesting access token...');
+                // Request an access token
+                tokenClient.requestAccessToken({prompt: ''});
+            });
+            
+            console.log('✅ Sign-in button rendered successfully');
+            
+            // Check if we already have a token
+            const storedToken = localStorage.getItem('googleToken');
+            if (storedToken && storedToken.length < 500) { // Access tokens are shorter than JWTs
+                console.log('♻️ Found stored access token, attempting to use it...');
+                window.accessToken = storedToken;
+                window.globalAccessToken = storedToken;
                 
-                // Store token in localStorage
-                localStorage.setItem('googleToken', token);
-                console.log('💾 Token stored in localStorage');
-                
-                // Set global access token for app.js to use
-                window.accessToken = token;
-                window.globalAccessToken = token;
-                
-                console.log('✅ Authentication successful - transitioning to loading...');
-                
-                // Show loading section
+                // Try loading data
                 document.getElementById('authSection').classList.add('hidden');
                 document.getElementById('loadingSection').classList.remove('hidden');
+                updateLoadingMessage('Using stored credentials...', 'Initializing...');
                 
-                // Load calendar data
-                if (window.loadCalendarData && typeof window.loadCalendarData === 'function') {
-                    console.log('📅 Starting to load calendar data...');
-                    window.loadCalendarData();
-                } else {
-                    console.log('📅 loadCalendarData not available yet, will be called when app.js loads');
-                    // Set a flag that we need to load data
-                    window.authCompleted = true;
-                }
-            } else {
-                console.error('❌ Authentication failed - no credential in response');
-                console.error('🔍 Response structure:', response);
+                // Use the same retry logic
+                const tryLoadCalendarData = (attempts = 0, maxAttempts = 10) => {
+                    console.log(`🔄 Attempt ${attempts + 1}/${maxAttempts} to load calendar data...`);
+                    
+                    if (window.loadCalendarData && typeof window.loadCalendarData === 'function') {
+                        console.log('✅ Found loadCalendarData function, calling it...');
+                        updateLoadingMessage('Loading calendar data...', 'Fetching events from Google Calendar...');
+                        try {
+                            window.loadCalendarData();
+                        } catch (error) {
+                            console.error('❌ Error calling loadCalendarData:', error);
+                            document.getElementById('errorMessage').textContent = `Failed to load calendar data: ${error.message}`;
+                            document.getElementById('loadingSection').classList.add('hidden');
+                            document.getElementById('errorSection').classList.remove('hidden');
+                        }
+                    } else if (attempts < maxAttempts) {
+                        const nextAttempt = attempts + 1;
+                        const waitTime = 500;
+                        console.log(`⏳ loadCalendarData not ready yet, retrying in ${waitTime}ms... (${nextAttempt}/${maxAttempts})`);
+                        updateLoadingMessage('Loading calendar data...', `Waiting for app.js... (${nextAttempt}/${maxAttempts})`);
+                        setTimeout(() => tryLoadCalendarData(nextAttempt, maxAttempts), waitTime);
+                    } else {
+                        console.error('❌ Failed to load app.js after', maxAttempts, 'attempts');
+                        document.getElementById('errorMessage').textContent = 'Failed to load app.js. Please refresh the page.';
+                        document.getElementById('loadingSection').classList.add('hidden');
+                        document.getElementById('errorSection').classList.remove('hidden');
+                    }
+                };
                 
-                // Show error
-                document.getElementById('authSection').classList.add('hidden');
-                document.getElementById('errorSection').classList.remove('hidden');
-                document.getElementById('errorMessage').textContent = 'Authentication failed. Please try again.';
+                tryLoadCalendarData();
             }
-        };
+        }
         
-        console.log('✅ Google Sign-In callback function registered globally');
+        // Start initialization when page loads
+        window.onload = initializeGoogleAuth;
+        
+        // Also try when DOM is ready (backup)
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeGoogleAuth);
+        } else {
+            initializeGoogleAuth();
+        }
     </script>
     
-    <script defer src="app.js"></script>
+    <!-- Load app.js WITHOUT defer so it's available when we need it -->
+    <!-- Cache busting: add timestamp to force reload -->
+    <script src="app.js?v=20251006-2350"></script>
 </body>
 </html>
