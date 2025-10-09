@@ -179,6 +179,15 @@ function setupEventListeners() {
         console.log('⚠️ Log button not found');
     }
     
+    // Random recap button
+    const randomRecapBtn = document.getElementById('randomRecapBtn');
+    if (randomRecapBtn) {
+        randomRecapBtn.addEventListener('click', showRandomRecapModal);
+        console.log('✅ Random recap button listener added');
+    } else {
+        console.log('⚠️ Random recap button not found');
+    }
+    
     // Sign out button
     const signOutBtn = document.getElementById('signOutBtn');
     if (signOutBtn) {
@@ -2347,5 +2356,323 @@ function hideSignOutButton() {
     const signOutBtn = document.getElementById('signOutBtn');
     if (signOutBtn) {
         signOutBtn.classList.add('hidden');
+    }
+}
+
+// Random Recap Modal Functions
+function showRandomRecapModal() {
+    console.log('🎲 Opening random recap modal...');
+    
+    // Create modal HTML
+    const modalHTML = `
+        <div id="randomRecapModal" class="random-recap-modal">
+            <div class="random-recap-modal-content">
+                <div class="random-recap-header">
+                    <h2>🎲 Random Recap</h2>
+                    <button class="random-recap-close" onclick="closeRandomRecapModal()">&times;</button>
+                </div>
+                
+                <div class="random-recap-settings">
+                    <h3>Settings</h3>
+                    <div class="random-recap-form-group">
+                        <label for="lookbackPeriod">Lookback Period:</label>
+                        <select id="lookbackPeriod" class="random-recap-lookback-select">
+                            <option value="7">1 Week</option>
+                            <option value="30">1 Month</option>
+                            <option value="90">3 Months</option>
+                            <option value="180">6 Months</option>
+                            <option value="365" selected>1 Year</option>
+                            <option value="730">2 Years</option>
+                        </select>
+                        <button id="generateRandomRecap" class="random-recap-generate-btn">🎲 Generate Random Day</button>
+                    </div>
+                </div>
+                
+                <div class="random-recap-content">
+                    <div class="random-recap-loading hidden">
+                        <div class="random-recap-loading-spinner"></div>
+                        <p>Finding a random day with activities...</p>
+                    </div>
+                    <div id="randomRecapResults"></div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Add event listener for generate button
+    document.getElementById('generateRandomRecap').addEventListener('click', generateRandomRecap);
+    
+    console.log('✅ Random recap modal opened');
+}
+
+function closeRandomRecapModal() {
+    const modal = document.getElementById('randomRecapModal');
+    if (modal) {
+        modal.remove();
+        console.log('✅ Random recap modal closed');
+    }
+}
+
+async function generateRandomRecap() {
+    console.log('🎲 Generating random recap...');
+    
+    const lookbackDays = parseInt(document.getElementById('lookbackPeriod').value);
+    const generateBtn = document.getElementById('generateRandomRecap');
+    const loadingDiv = document.querySelector('.random-recap-loading');
+    const resultsDiv = document.getElementById('randomRecapResults');
+    
+    // Show loading state
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Searching...';
+    loadingDiv.classList.remove('hidden');
+    resultsDiv.innerHTML = '';
+    
+    try {
+        const accessToken = getAccessToken();
+        if (!accessToken) {
+            throw new Error('No access token available. Please sign in again.');
+        }
+        
+        // Calculate date range
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - lookbackDays);
+        
+        console.log(`🔍 Searching for random day between ${startDate.toLocaleDateString()} and ${endDate.toLocaleDateString()}`);
+        
+        // Get calendar list
+        const calendarListResponse = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!calendarListResponse.ok) {
+            throw new Error('Failed to fetch calendar list');
+        }
+        
+        const calendarList = await calendarListResponse.json();
+        const relevantCalendars = calendarList.items?.filter(calendar =>
+            calendar.id === 'primary' ||
+            calendar.summary?.toLowerCase().includes('diary') ||
+            calendar.summary?.toLowerCase().includes('actual')
+        ) || [];
+        
+        console.log('📅 Relevant calendars:', relevantCalendars.map(cal => cal.summary));
+        
+        // Fetch events from all relevant calendars
+        let allEvents = [];
+        
+        for (const calendar of relevantCalendars) {
+            console.log(`📅 Fetching events from: ${calendar.summary}`);
+            
+            const apiUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events?` +
+                `timeMin=${startDate.toISOString()}&` +
+                `timeMax=${endDate.toISOString()}&` +
+                `singleEvents=true&` +
+                `orderBy=startTime&` +
+                `maxResults=2500`;
+            
+            const response = await fetch(apiUrl, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                const events = data.items || [];
+                events.forEach(event => {
+                    event.calendarName = calendar.summary;
+                });
+                allEvents = allEvents.concat(events);
+                console.log(`📅 Found ${events.length} events in ${calendar.summary}`);
+            } else {
+                console.warn(`⚠️ Failed to fetch events from ${calendar.summary}: ${response.status}`);
+            }
+        }
+        
+        console.log(`📊 Total events found: ${allEvents.length}`);
+        
+        // Group events by date
+        const eventsByDate = {};
+        allEvents.forEach(event => {
+            if (event.start.dateTime || event.start.date) {
+                const eventDate = new Date(event.start.dateTime || event.start.date);
+                const dateKey = getLocalDateKey(eventDate);
+                
+                if (!eventsByDate[dateKey]) {
+                    eventsByDate[dateKey] = {
+                        date: eventDate,
+                        events: []
+                    };
+                }
+                eventsByDate[dateKey].events.push(event);
+            }
+        });
+        
+        // Find dates with events
+        const datesWithEvents = Object.keys(eventsByDate).filter(dateKey => 
+            eventsByDate[dateKey].events.length > 0
+        );
+        
+        console.log(`📅 Dates with events: ${datesWithEvents.length}`);
+        
+        if (datesWithEvents.length === 0) {
+            throw new Error('No events found in the selected time period. Try expanding your lookback period.');
+        }
+        
+        // Select a random date with retry mechanism
+        const maxAttempts = 10;
+        let selectedDate = null;
+        let attempts = 0;
+        
+        while (!selectedDate && attempts < maxAttempts) {
+            const randomIndex = Math.floor(Math.random() * datesWithEvents.length);
+            const randomDateKey = datesWithEvents[randomIndex];
+            const dayEvents = eventsByDate[randomDateKey].events;
+            
+            // Check if this date has meaningful events (not just all-day events)
+            const hasTimedEvents = dayEvents.some(event => event.start.dateTime);
+            
+            if (hasTimedEvents) {
+                selectedDate = {
+                    dateKey: randomDateKey,
+                    date: eventsByDate[randomDateKey].date,
+                    events: dayEvents
+                };
+                console.log(`✅ Selected random date: ${randomDateKey} with ${dayEvents.length} events`);
+            } else {
+                console.log(`⚠️ Date ${randomDateKey} has only all-day events, trying again...`);
+                attempts++;
+            }
+        }
+        
+        if (!selectedDate) {
+            throw new Error('Could not find a suitable random day with timed events. Try expanding your lookback period.');
+        }
+        
+        // Display the random day
+        displayRandomDay(selectedDate);
+        
+    } catch (error) {
+        console.error('❌ Error generating random recap:', error);
+        resultsDiv.innerHTML = `
+            <div class="random-recap-error">
+                <h4>❌ Error</h4>
+                <p>${error.message}</p>
+            </div>
+        `;
+    } finally {
+        // Reset button state
+        generateBtn.disabled = false;
+        generateBtn.textContent = '🎲 Generate Random Day';
+        loadingDiv.classList.add('hidden');
+    }
+}
+
+function displayRandomDay(selectedDate) {
+    const resultsDiv = document.getElementById('randomRecapResults');
+    const { date, events } = selectedDate;
+    
+    // Sort events by start time
+    events.sort((a, b) => {
+        const aTime = new Date(a.start.dateTime || a.start.date);
+        const bTime = new Date(b.start.dateTime || b.start.date);
+        return aTime - bTime;
+    });
+    
+    // Format date display
+    const dateStr = date.toLocaleDateString([], {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+    
+    const timeAgo = getTimeAgo(date);
+    
+    // Calculate total time
+    let totalMinutes = 0;
+    events.forEach(event => {
+        if (event.start.dateTime && event.end.dateTime) {
+            const start = new Date(event.start.dateTime);
+            const end = new Date(event.end.dateTime);
+            totalMinutes += (end - start) / (1000 * 60);
+        }
+    });
+    
+    const totalHours = Math.floor(totalMinutes / 60);
+    const remainingMinutes = Math.floor(totalMinutes % 60);
+    const totalTimeStr = totalHours > 0 ? `${totalHours}h ${remainingMinutes}m` : `${remainingMinutes}m`;
+    
+    // Create timeline HTML
+    let timelineHTML = '';
+    events.forEach(event => {
+        const startTime = new Date(event.start.dateTime || event.start.date);
+        const endTime = new Date(event.end.dateTime || event.end.date);
+        
+        const timeStr = event.start.dateTime ?
+            `${formatTime(startTime)} - ${formatTime(endTime)}` :
+            'All day';
+        
+        const category = categorizeEvent(event.summary);
+        
+        timelineHTML += `
+            <div class="random-recap-timeline-item">
+                <div class="random-recap-timeline-time">${timeStr}</div>
+                <div class="random-recap-timeline-title">${event.summary || 'No title'}</div>
+                ${event.description ? `<div class="random-recap-timeline-description">${event.description}</div>` : ''}
+                <div class="random-recap-timeline-category category-${category}">${category}</div>
+                ${event.calendarName ? `<div class="random-recap-timeline-calendar">📅 ${event.calendarName}</div>` : ''}
+            </div>
+        `;
+    });
+    
+    // Display results
+    resultsDiv.innerHTML = `
+        <div class="random-recap-success">
+            <h4>🎉 Found a random day!</h4>
+            <p>Here's what you were up to on a random day from your calendar.</p>
+        </div>
+        
+        <div class="random-recap-timeline">
+            <h3>📅 Timeline</h3>
+            <div class="random-recap-timeline-date">
+                <h4>${dateStr}</h4>
+                <p>${timeAgo} • ${events.length} events • ${totalTimeStr} total</p>
+            </div>
+            <div class="random-recap-timeline-events">
+                ${timelineHTML}
+            </div>
+        </div>
+    `;
+    
+    console.log(`✅ Random day displayed: ${dateStr} with ${events.length} events`);
+}
+
+function getTimeAgo(date) {
+    const now = new Date();
+    const diffTime = Math.abs(now - date);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 1) {
+        return 'Yesterday';
+    } else if (diffDays < 7) {
+        return `${diffDays} days ago`;
+    } else if (diffDays < 30) {
+        const weeks = Math.floor(diffDays / 7);
+        return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
+    } else if (diffDays < 365) {
+        const months = Math.floor(diffDays / 30);
+        return months === 1 ? '1 month ago' : `${months} months ago`;
+    } else {
+        const years = Math.floor(diffDays / 365);
+        return years === 1 ? '1 year ago' : `${years} years ago`;
     }
 }
