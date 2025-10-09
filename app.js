@@ -2040,8 +2040,10 @@ async function handleLogSubmit(event) {
         // Refresh the data to show the new event
         await loadCalendarData();
         
-        // Show success message
-        alert('✅ Event created successfully!');
+        // Show detailed success message
+        const eventTitle = eventData.summary;
+        const startTime = new Date(eventData.start).toLocaleString();
+        alert(`✅ Event created successfully!\n\n📝 Title: ${eventTitle}\n⏰ Time: ${startTime}\n📅 Calendar: ${eventData.calendar}\n\nCheck your Google Calendar to see the event!`);
         
     } catch (error) {
         console.error('❌ Failed to create event:', error);
@@ -2079,10 +2081,26 @@ async function createCalendarEvent(eventData) {
     
     console.log('📅 Creating event with payload:', eventPayload);
     
-    // For now, we'll use the primary calendar
-    // In a full implementation, you'd want to support multiple calendars
+    // Determine which calendar to create the event in
+    let targetCalendar = 'primary'; // default
+    
+    // Map calendar names to calendar IDs
+    const calendarMapping = {
+        'Actual Diary - Prod': 'primary', // or specific calendar ID if you have one
+        'Actual Diary - Nonprod': 'primary', // or specific calendar ID if you have one  
+        'Actual Diary - Admin/Rest/Routine': 'primary' // or specific calendar ID if you have one
+    };
+    
+    // For now, we'll create all events in the primary calendar
+    // But we'll add the calendar type to the event title for identification
+    const calendarType = eventData.calendar;
+    eventPayload.summary = `[${calendarType}] ${eventPayload.summary}`;
+    
+    console.log('📅 Creating event in calendar:', targetCalendar);
+    console.log('📅 Updated event title:', eventPayload.summary);
+    
     const response = await fetch(
-        'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+        `https://www.googleapis.com/calendar/v3/calendars/${targetCalendar}/events`,
         {
             method: 'POST',
             headers: {
@@ -2099,6 +2117,12 @@ async function createCalendarEvent(eventData) {
     }
     
     const result = await response.json();
-    console.log('✅ Event created:', result);
+    console.log('✅ Event created successfully!');
+    console.log('📅 Event ID:', result.id);
+    console.log('📅 Event Title:', result.summary);
+    console.log('📅 Event Start:', result.start.dateTime);
+    console.log('📅 Event End:', result.end.dateTime);
+    console.log('📅 Calendar ID:', result.organizer?.email || 'primary');
+    console.log('📅 Full Event Data:', result);
     return result;
 }
