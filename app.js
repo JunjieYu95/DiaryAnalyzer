@@ -1728,7 +1728,7 @@ style.textContent = `
         align-items: center;
         gap: 10px;
         flex-shrink: 0;
-        min-width: 60px;
+        min-width: 5vw;
     }
     .bar-label {
         font-size: 0.9rem;
@@ -1796,8 +1796,8 @@ style.textContent = `
         font-size: 0.9rem;
     }
     .legend-color {
-        width: 16px;
-        height: 16px;
+        width: 1.3vw;
+        height: 1.3vw;
         border-radius: 3px;
     }
     .legend-color.prod {
@@ -1869,7 +1869,7 @@ style.textContent = `
         background: white;
         border-radius: 12px;
         padding: 30px;
-        max-width: 500px;
+        max-width: 42vw;
         width: 90%;
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
     }
@@ -1890,8 +1890,8 @@ style.textContent = `
         cursor: pointer;
         color: #6b7280;
         padding: 0;
-        width: 30px;
-        height: 30px;
+        width: 2.5vw;
+        height: 2.5vw;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1929,7 +1929,7 @@ style.textContent = `
     }
     .form-group textarea {
         resize: vertical;
-        min-height: 80px;
+        min-height: 8vh;
     }
     .modal-actions {
         display: flex;
