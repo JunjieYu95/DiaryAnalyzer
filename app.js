@@ -438,10 +438,16 @@ async function fetchGoogleCalendarEvents(accessToken) {
             calendar.summary?.toLowerCase().includes('actual')
         ) || [];
 
+        console.log('📅 All calendars found:', calendars.map(cal => cal.summary));
         console.log('📅 Relevant calendars:', relevantCalendars.map(cal => cal.summary));
 
         const timeMin = getDateRangeStart();
         const timeMax = getDateRangeEnd();
+        
+        console.log('📅 Date range for fetching events:');
+        console.log('  - From:', timeMin.toISOString());
+        console.log('  - To:', timeMax.toISOString());
+        console.log('  - Current date range setting:', dateRange.value);
 
         // Fetch events from all relevant calendars
         allEvents = [];
@@ -1961,6 +1967,11 @@ function showLogModal() {
     const lastEventEndTime = getLastEventEndTime();
     const currentTime = new Date();
     
+    console.log('🔍 DEBUG: Quick Log time calculation:');
+    console.log('  - allEvents length:', allEvents ? allEvents.length : 'null');
+    console.log('  - lastEventEndTime:', lastEventEndTime ? lastEventEndTime.toLocaleString() : 'null');
+    console.log('  - currentTime:', currentTime.toLocaleString());
+    
     // Format times for datetime-local input
     const formatDateTimeLocal = (date) => {
         const year = date.getFullYear();
@@ -1973,6 +1984,9 @@ function showLogModal() {
     
     const startTime = lastEventEndTime ? formatDateTimeLocal(lastEventEndTime) : formatDateTimeLocal(currentTime);
     const endTime = formatDateTimeLocal(currentTime);
+    
+    console.log('  - startTime (formatted):', startTime);
+    console.log('  - endTime (formatted):', endTime);
     
     // Create modal HTML
     const modalHTML = `
@@ -2034,19 +2048,32 @@ function closeLogModal() {
 }
 
 function getLastEventEndTime() {
+    console.log('🔍 getLastEventEndTime called:');
+    console.log('  - allEvents:', allEvents ? `array with ${allEvents.length} items` : 'null/undefined');
+    
     if (!allEvents || allEvents.length === 0) {
+        console.log('  - No events available, returning null');
         return null;
     }
     
     // Find the most recent event by end time
     const timedEvents = allEvents.filter(event => event.end && event.end.dateTime);
-    const sortedEvents = timedEvents.sort((a, b) => new Date(b.end.dateTime) - new Date(a.end.dateTime));
+    console.log('  - Events with end.dateTime:', timedEvents.length);
     
-    if (sortedEvents.length === 0) {
+    if (timedEvents.length === 0) {
+        console.log('  - No timed events found, returning null');
         return null;
     }
     
-    return new Date(sortedEvents[0].end.dateTime);
+    const sortedEvents = timedEvents.sort((a, b) => new Date(b.end.dateTime) - new Date(a.end.dateTime));
+    const lastEvent = sortedEvents[0];
+    const lastEventEndTime = new Date(lastEvent.end.dateTime);
+    
+    console.log('  - Last event:', lastEvent.summary);
+    console.log('  - Last event end time:', lastEvent.end.dateTime);
+    console.log('  - Returning:', lastEventEndTime.toLocaleString());
+    
+    return lastEventEndTime;
 }
 
 async function handleLogSubmit(event) {

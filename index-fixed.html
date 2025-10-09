@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Diary Analyzer - Web Application</title>
     <link rel="stylesheet" href="styles.css">
     <!-- Load Google API Client Library for proper OAuth -->
@@ -27,9 +27,7 @@
                         <option value="timeline">Timeline</option>
                         <option value="advanced">Advanced Analytics</option>
                     </select>
-                    <button id="logButton" class="log-btn">📝 Quick Log</button>
                     <button id="refreshBtn" class="refresh-btn">🔄 Refresh</button>
-                    <button id="signOutBtn" class="signout-btn hidden">🚪 Sign Out</button>
                 </div>
             </div>
         </header>
@@ -50,7 +48,7 @@
 
             <!-- Loading Section -->
             <section id="loadingSection" class="loading-section hidden">
-                    <div class="loading-spinner"></div>
+                <div class="loading-spinner"></div>
                 <p id="loadingMessage">Loading your calendar data...</p>
                 <p id="loadingDetails" style="font-size: 0.85rem; color: #888; margin-top: 0.5rem;"></p>
             </section>
@@ -78,8 +76,8 @@
                     <div class="stat-card">
                         <h3>Most Common</h3>
                         <p id="mostCommon" class="stat-value">-</p>
+                    </div>
                 </div>
-            </div>
 
                 <!-- Navigation -->
                 <div class="date-navigation">
@@ -105,8 +103,18 @@
                 <!-- Advanced Analytics View -->
                 <div id="advancedContainer" class="advanced-container hidden">
                     <h3>Advanced Analytics</h3>
+                    <div class="chart-controls">
+                        <label>
+                            <input type="checkbox" id="stackedChart"> Stacked View
+                        </label>
+                        <select id="chartMode">
+                            <option value="daily-totals">Daily Totals</option>
+                            <option value="timeline-flow">Timeline Flow</option>
+                        </select>
+                    </div>
                     <div id="advancedCharts" class="advanced-charts">
-                        <!-- Charts will be dynamically inserted here -->
+                        <canvas id="timeSeriesChart"></canvas>
+                        <canvas id="categoryChart"></canvas>
                     </div>
                 </div>
             </section>
@@ -116,8 +124,7 @@
         </footer>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- config.js must load BEFORE app.js, so no defer -->
-    <script src="config.js"></script>
+    <script defer src="config.js"></script>
     
     <!-- Google OAuth Setup - REQUEST ACCESS TOKEN NOT ID TOKEN -->
     <script>
@@ -147,10 +154,9 @@
             console.log('✅ Google API loaded, setting up OAuth...');
             
             // Initialize the Token Client for OAuth 2.0
-            // Client ID comes from config.js - never hardcode credentials
             tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CONFIG.GOOGLE_CLIENT_ID,
-                scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events',
+                client_id: '1025050561840-jedvsb3bce3gjvj5k081l5afia5h0mnq.apps.googleusercontent.com',
+                scope: 'https://www.googleapis.com/auth/calendar.readonly',
                 callback: (response) => {
                     console.log('🔐 OAuth Token Response:', response);
                     
@@ -312,6 +318,6 @@
     
     <!-- Load app.js WITHOUT defer so it's available when we need it -->
     <!-- Cache busting: add timestamp to force reload -->
-    <script src="app.js?v=20250117-1610"></script>
+    <script src="app.js?v=20251006-2350"></script>
 </body>
 </html>

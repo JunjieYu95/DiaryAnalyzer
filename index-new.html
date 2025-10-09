@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diary Analyzer - Supabase Backend</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-content">
+                <h1>📊 Diary Analyzer</h1>
+                <p class="header-subtitle">Beautiful time series visualization for your Google Calendar diary entries</p>
+            </div>
+        </header>
+
+        <!-- Auth Section -->
+        <div id="authSection" class="auth-section">
+            <div class="auth-card">
+                <h2>🔐 Connect Your Google Calendar</h2>
+                <p>Sign in with your Google account to analyze your calendar data</p>
+                <button id="authBtn" class="auth-btn">
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                        <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
+                        <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2.01a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/>
+                        <path fill="#FBBC05" d="M4.5 10.52A4.8 4.8 0 0 1 4.5 7.48V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/>
+                        <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/>
+                    </svg>
+                    Sign in with Google
+                </button>
+                <div id="authStatus" class="auth-status"></div>
+            </div>
+        </div>
+
+        <!-- Loading Section -->
+        <div id="loadingSection" class="loading-section hidden">
+            <div class="loading-spinner"></div>
+            <p>Loading your calendar data...</p>
+        </div>
+
+        <!-- Error Section -->
+        <div id="errorSection" class="error-section hidden">
+            <div class="error-card">
+                <h2>⚠️ Something went wrong</h2>
+                <p id="errorMessage"></p>
+                <button id="retryBtn" class="retry-btn">Try Again</button>
+            </div>
+        </div>
+
+        <!-- Content Section -->
+        <div id="contentSection" class="content-section hidden">
+            <div class="controls">
+                <select id="dateRange" class="date-selector">
+                    <option value="today">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                    <option value="quarter">This Quarter</option>
+                    <option value="year">This Year</option>
+                </select>
+                <button id="refreshBtn" class="refresh-btn">🔄 Refresh</button>
+                <button id="signOutBtn" class="sign-out-btn">Sign Out</button>
+            </div>
+
+            <div class="stats-container">
+                <div class="stat-card">
+                    <h3>Total Events</h3>
+                    <p id="totalEvents" class="stat-value">0</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Active Hours</h3>
+                    <p id="activeHours" class="stat-value">0h 0m</p>
+                </div>
+            </div>
+
+            <div class="calendar-data">
+                <h3>Your Calendar Events</h3>
+                <div id="eventsContainer" class="events-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import Supabase config
+        const SUPABASE_URL = 'https://kiddsrordcksmqbxyerv.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpZGRzcm9yZGNrc21xYnh5ZXJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3MTM2MzYsImV4cCI6MjA3NTI4OTYzNn0.EJWsHLDaRMdHAMgGq5cVemYyHtJGyqsQSOOD7B2Cigk';
+
+        // Initialize Supabase client
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // DOM elements
+        const authSection = document.getElementById('authSection');
+        const loadingSection = document.getElementById('loadingSection');
+        const errorSection = document.getElementById('errorSection');
+        const contentSection = document.getElementById('contentSection');
+        const authBtn = document.getElementById('authBtn');
+        const signOutBtn = document.getElementById('signOutBtn');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const retryBtn = document.getElementById('retryBtn');
+        const authStatus = document.getElementById('authStatus');
+        const errorMessage = document.getElementById('errorMessage');
+        const eventsContainer = document.getElementById('eventsContainer');
+        const totalEvents = document.getElementById('totalEvents');
+        const activeHours = document.getElementById('activeHours');
+
+        // Helper functions
+        function showSection(section) {
+            authSection.classList.add('hidden');
+            loadingSection.classList.add('hidden');
+            errorSection.classList.add('hidden');
+            contentSection.classList.add('hidden');
+            
+            switch(section) {
+                case 'auth': authSection.classList.remove('hidden'); break;
+                case 'loading': loadingSection.classList.remove('hidden'); break;
+                case 'error': errorSection.classList.remove('hidden'); break;
+                case 'content': contentSection.classList.remove('hidden'); break;
+            }
+        }
+
+        function showError(msg) {
+            errorMessage.textContent = msg;
+            showSection('error');
+        }
+
+        // Check if returning from OAuth callback
+        function checkOAuthCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const userId = urlParams.get('user_id');
+            const error = urlParams.get('error');
+
+            if (error) {
+                showError(`Authentication failed: ${error}`);
+                return;
+            }
+
+            if (userId) {
+                console.log('OAuth successful, user ID:', userId);
+                localStorage.setItem('userId', userId);
+                // Clear URL params
+                window.history.replaceState({}, document.title, window.location.pathname);
+                loadCalendarData(userId);
+            }
+        }
+
+        // Sign in with Google
+        authBtn.addEventListener('click', async () => {
+            try {
+                authStatus.textContent = '🔄 Redirecting to Google...';
+                
+                // Redirect to Supabase Edge Function for OAuth
+                const authUrl = `${SUPABASE_URL}/functions/v1/auth-google?redirect_uri=${encodeURIComponent(window.location.origin)}`;
+                window.location.href = authUrl;
+            } catch (error) {
+                console.error('Auth error:', error);
+                showError(`Authentication failed: ${error.message}`);
+            }
+        });
+
+        // Sign out
+        signOutBtn.addEventListener('click', () => {
+            localStorage.removeItem('userId');
+            showSection('auth');
+        });
+
+        // Load calendar data
+        async function loadCalendarData(userId) {
+            try {
+                showSection('loading');
+
+                const response = await fetch(
+                    `${SUPABASE_URL}/functions/v1/calendar-events?user_id=${userId}`,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            'Content-Type': 'application/json'
+                        }
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                console.log('Calendar data:', data);
+
+                displayEvents(data.events || []);
+                showSection('content');
+            } catch (error) {
+                console.error('Error loading calendar data:', error);
+                showError(`Failed to load calendar data: ${error.message}`);
+            }
+        }
+
+        // Display events
+        function displayEvents(events) {
+            totalEvents.textContent = events.length;
+            
+            // Calculate total hours
+            let totalMinutes = 0;
+            events.forEach(event => {
+                if (event.start?.dateTime && event.end?.dateTime) {
+                    const start = new Date(event.start.dateTime);
+                    const end = new Date(event.end.dateTime);
+                    totalMinutes += (end - start) / (1000 * 60);
+                }
+            });
+            
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = Math.floor(totalMinutes % 60);
+            activeHours.textContent = `${hours}h ${minutes}m`;
+
+            // Display events list
+            eventsContainer.innerHTML = '';
+            if (events.length === 0) {
+                eventsContainer.innerHTML = '<p>No events found.</p>';
+                return;
+            }
+
+            events.forEach(event => {
+                const eventEl = document.createElement('div');
+                eventEl.className = 'event-item';
+                
+                const startTime = event.start?.dateTime 
+                    ? new Date(event.start.dateTime).toLocaleString()
+                    : 'All day';
+                
+                eventEl.innerHTML = `
+                    <h4>${event.summary || 'Untitled Event'}</h4>
+                    <p>📅 ${startTime}</p>
+                    ${event.description ? `<p>${event.description}</p>` : ''}
+                `;
+                
+                eventsContainer.appendChild(eventEl);
+            });
+        }
+
+        // Refresh data
+        refreshBtn.addEventListener('click', () => {
+            const userId = localStorage.getItem('userId');
+            if (userId) {
+                loadCalendarData(userId);
+            }
+        });
+
+        retryBtn.addEventListener('click', () => {
+            const userId = localStorage.getItem('userId');
+            if (userId) {
+                loadCalendarData(userId);
+            } else {
+                showSection('auth');
+            }
+        });
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 Diary Analyzer with Supabase Backend');
+            
+            // Check if returning from OAuth
+            checkOAuthCallback();
+            
+            // Check if already authenticated
+            const userId = localStorage.getItem('userId');
+            if (userId) {
+                console.log('Found stored user ID, loading data...');
+                loadCalendarData(userId);
+            } else {
+                showSection('auth');
+            }
+        });
+    </script>
+
+    <style>
+        .hidden { display: none !important; }
+        .auth-status { margin-top: 1rem; color: #666; font-size: 0.9rem; }
+        .sign-out-btn { 
+            background: #dc3545; 
+            color: white; 
+            border: none; 
+            padding: 0.5rem 1rem; 
+            border-radius: 4px; 
+            cursor: pointer;
+        }
+        .events-container { 
+            max-height: 500px; 
+            overflow-y: auto; 
+            margin-top: 1rem;
+        }
+        .event-item {
+            background: #f8f9fa;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: 4px;
+            border-left: 3px solid #6366f1;
+        }
+        .event-item h4 { margin: 0 0 0.5rem 0; }
+        .event-item p { margin: 0.25rem 0; color: #666; font-size: 0.9rem; }
+    </style>
+</body>
+</html>
