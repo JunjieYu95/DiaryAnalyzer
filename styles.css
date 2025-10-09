@@ -1228,9 +1228,73 @@ body {
         user-select: none;
     }
     
+    /* Improve touch interactions */
+    button, .nav-btn, .refresh-btn, .log-btn, .signout-btn, .stat-card, .timeline-item, .calendar-bar {
+        touch-action: manipulation;
+    }
+    
+    /* Better mobile spacing for controls */
+    .controls {
+        gap: 1.25rem;
+    }
+    
+    /* Improve mobile button spacing */
+    .refresh-btn,
+    .log-btn,
+    .signout-btn {
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Enhanced mobile button states */
+    .refresh-btn:active,
+    .log-btn:active,
+    .signout-btn:active {
+        transform: scale(0.98);
+        transition: transform 0.1s ease;
+    }
+    
+    /* Better mobile form controls */
+    .date-selector:focus,
+    .view-selector:focus {
+        transform: scale(1.02);
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+    }
+    
+    /* Improved mobile card interactions */
+    .stat-card:active {
+        transform: scale(0.98);
+        transition: transform 0.1s ease;
+    }
+    
+    /* Better mobile scrolling performance */
+    .timeline-container,
+    .distribution-chart,
+    .advanced-charts {
+        will-change: transform;
+        transform: translateZ(0);
+    }
+    
     /* Enhanced mobile spacing */
     .app-header {
         padding: 1.5rem 0;
+    }
+    
+    /* Better mobile text readability */
+    .header-subtitle {
+        line-height: 1.6;
+    }
+    
+    /* Improved mobile button contrast */
+    .refresh-btn,
+    .log-btn,
+    .signout-btn {
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    }
+    
+    .refresh-btn:hover,
+    .log-btn:hover,
+    .signout-btn:hover {
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
     }
     
     .header-content {
@@ -1314,6 +1378,10 @@ body {
         min-width: auto;
         font-size: 1rem;
         padding: 1rem 1.25rem;
+        border-radius: 12px;
+        border: 2px solid #e2e8f0;
+        background-color: #ffffff;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     
     .refresh-btn,
@@ -1322,6 +1390,9 @@ body {
         width: 100%;
         font-size: 1rem;
         padding: 1rem 1.5rem;
+        border-radius: 12px;
+        font-weight: 600;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     
     .app-main {
@@ -1491,18 +1562,39 @@ body {
     }
     
     .controls {
-        gap: 0.5rem;
+        gap: 0.75rem;
     }
     
     .date-selector,
     .view-selector {
         font-size: 0.95rem;
-        padding: 0.75rem 0.875rem;
+        padding: 0.875rem 1rem;
+        border-radius: 10px;
     }
     
-    .refresh-btn {
+    .refresh-btn,
+    .log-btn,
+    .signout-btn {
         font-size: 0.95rem;
-        padding: 0.75rem 1.25rem;
+        padding: 0.875rem 1.25rem;
+        border-radius: 10px;
+        font-weight: 600;
+        box-shadow: 0 2px 6px rgba(102, 126, 234, 0.25);
+    }
+    
+    /* Enhanced mobile button states for small screens */
+    .refresh-btn:active,
+    .log-btn:active,
+    .signout-btn:active {
+        transform: scale(0.96);
+        transition: transform 0.1s ease;
+    }
+    
+    /* Better mobile form focus states */
+    .date-selector:focus,
+    .view-selector:focus {
+        transform: scale(1.01);
+        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3);
     }
     
     .app-main {
