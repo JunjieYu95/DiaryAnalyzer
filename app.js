@@ -438,7 +438,7 @@ async function fetchGoogleCalendarEvents(accessToken) {
             calendar.summary?.toLowerCase().includes('actual')
         ) || [];
 
-        console.log('📅 All calendars found:', calendars.map(cal => cal.summary));
+        console.log('📅 All calendars found:', calendarList.items?.map(cal => cal.summary));
         console.log('📅 Relevant calendars:', relevantCalendars.map(cal => cal.summary));
 
         const timeMin = getDateRangeStart();
@@ -454,6 +454,7 @@ async function fetchGoogleCalendarEvents(accessToken) {
 
         for (const calendar of relevantCalendars) {
             console.log(`📅 Fetching events from: ${calendar.summary}`);
+            console.log(`📅 Calendar ID: ${calendar.id}`);
 
             const apiUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events?` +
                 `timeMin=${timeMin.toISOString()}&` +
@@ -461,6 +462,8 @@ async function fetchGoogleCalendarEvents(accessToken) {
                 `singleEvents=true&` +
                 `orderBy=startTime&` +
                 `maxResults=2500`;
+            
+            console.log(`📅 API URL: ${apiUrl}`);
 
             const response = await fetch(apiUrl, {
                 headers: {
@@ -1960,15 +1963,14 @@ style.textContent = `
 document.head.appendChild(style);
 
 // Log Modal Functions
-function showLogModal() {
+async function showLogModal() {
     console.log('📝 Opening log modal...');
     
-    // Get the last event's end time as default start time
-    const lastEventEndTime = getLastEventEndTime();
+    // Get the last event's end time as default start time (looks at past week)
+    const lastEventEndTime = await getLastEventEndTime();
     const currentTime = new Date();
     
     console.log('🔍 DEBUG: Quick Log time calculation:');
-    console.log('  - allEvents length:', allEvents ? allEvents.length : 'null');
     console.log('  - lastEventEndTime:', lastEventEndTime ? lastEventEndTime.toLocaleString() : 'null');
     console.log('  - currentTime:', currentTime.toLocaleString());
     
@@ -2047,17 +2049,84 @@ function closeLogModal() {
     }
 }
 
-function getLastEventEndTime() {
+async function getLastEventEndTime() {
     console.log('🔍 getLastEventEndTime called:');
-    console.log('  - allEvents:', allEvents ? `array with ${allEvents.length} items` : 'null/undefined');
     
-    if (!allEvents || allEvents.length === 0) {
-        console.log('  - No events available, returning null');
+    const accessToken = getAccessToken();
+    if (!accessToken) {
+        console.log('  - No access token available');
+        return null;
+    }
+    
+    // Get calendars first
+    const calendarListResponse = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+        }
+    });
+    
+    if (!calendarListResponse.ok) {
+        console.log('  - Failed to fetch calendar list');
+        return null;
+    }
+    
+    const calendarList = await calendarListResponse.json();
+    const relevantCalendars = calendarList.items?.filter(calendar =>
+        calendar.id === 'primary' ||
+        calendar.summary?.toLowerCase().includes('diary') ||
+        calendar.summary?.toLowerCase().includes('actual')
+    ) || [];
+    
+    console.log('  - Relevant calendars for last event search:', relevantCalendars.map(cal => cal.summary));
+    
+    // Look at the past week for events
+    const now = new Date();
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    console.log('  - Searching from:', oneWeekAgo.toISOString(), 'to:', now.toISOString());
+    
+    let allRecentEvents = [];
+    
+    for (const calendar of relevantCalendars) {
+        console.log(`  - Fetching events from: ${calendar.summary}`);
+        
+        const apiUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events?` +
+            `timeMin=${oneWeekAgo.toISOString()}&` +
+            `timeMax=${now.toISOString()}&` +
+            `singleEvents=true&` +
+            `orderBy=startTime&` +
+            `maxResults=2500`;
+        
+        const response = await fetch(apiUrl, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const events = data.items || [];
+            events.forEach(event => {
+                event.calendarName = calendar.summary;
+            });
+            allRecentEvents = allRecentEvents.concat(events);
+            console.log(`  - Found ${events.length} events in ${calendar.summary}`);
+        } else {
+            console.log(`  - Failed to fetch from ${calendar.summary}: ${response.status}`);
+        }
+    }
+    
+    console.log(`  - Total events found in past week: ${allRecentEvents.length}`);
+    
+    if (allRecentEvents.length === 0) {
+        console.log('  - No events found in past week, returning null');
         return null;
     }
     
     // Find the most recent event by end time
-    const timedEvents = allEvents.filter(event => event.end && event.end.dateTime);
+    const timedEvents = allRecentEvents.filter(event => event.end && event.end.dateTime);
     console.log('  - Events with end.dateTime:', timedEvents.length);
     
     if (timedEvents.length === 0) {
