@@ -1870,9 +1870,11 @@ style.textContent = `
         height: 100%;
         background: rgba(0, 0, 0, 0.5);
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
         z-index: 1000;
+        padding-top: 5vh;
+        overflow-y: auto;
     }
     .log-modal-content {
         background: white;
@@ -2390,6 +2392,10 @@ function showRandomRecapModal() {
             }
         };
         document.addEventListener('keydown', handleEscape);
+        
+        // Auto-generate random day when modal opens
+        console.log('🎲 Auto-generating random day...');
+        generateRandomRecap();
         
         console.log('✅ Random recap modal opened');
     } else {
