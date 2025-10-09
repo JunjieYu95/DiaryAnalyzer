@@ -2217,23 +2217,32 @@ async function createCalendarEvent(eventData) {
     
     console.log('📅 Creating event with payload:', eventPayload);
     
-    // Determine which calendar to create the event in
-    let targetCalendar = 'primary'; // default
+    // Get the actual calendar ID for the selected calendar
+    const calendarListResponse = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+        }
+    });
     
-    // Map calendar names to calendar IDs
-    const calendarMapping = {
-        'Actual Diary - Prod': 'primary', // or specific calendar ID if you have one
-        'Actual Diary - Nonprod': 'primary', // or specific calendar ID if you have one  
-        'Actual Diary - Admin/Rest/Routine': 'primary' // or specific calendar ID if you have one
-    };
+    if (!calendarListResponse.ok) {
+        throw new Error('Failed to fetch calendar list');
+    }
     
-    // For now, we'll create all events in the primary calendar
-    // But we'll add the calendar type to the event title for identification
-    const calendarType = eventData.calendar;
-    eventPayload.summary = `[${calendarType}] ${eventPayload.summary}`;
+    const calendarList = await calendarListResponse.json();
+    const selectedCalendar = calendarList.items?.find(cal => cal.summary === eventData.calendar);
+    
+    let targetCalendar = 'primary'; // default fallback
+    
+    if (selectedCalendar) {
+        targetCalendar = selectedCalendar.id;
+        console.log(`📅 Found target calendar: ${selectedCalendar.summary} (ID: ${selectedCalendar.id})`);
+    } else {
+        console.log(`⚠️ Calendar "${eventData.calendar}" not found, using primary calendar`);
+    }
     
     console.log('📅 Creating event in calendar:', targetCalendar);
-    console.log('📅 Updated event title:', eventPayload.summary);
+    console.log('📅 Event title:', eventPayload.summary);
     
     const response = await fetch(
         `https://www.googleapis.com/calendar/v3/calendars/${targetCalendar}/events`,
