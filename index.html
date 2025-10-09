@@ -3,8 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-    <title>Diary Analyzer - Web Application</title>
+    <title>Diary Analyzer - Beautiful Calendar Analytics</title>
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Beautiful time series visualization for your Google Calendar diary entries. Track productivity, analyze patterns, and gain insights into how you spend your time.">
+    <meta name="keywords" content="calendar analytics, time tracking, productivity, Google Calendar, data visualization, diary analyzer">
+    <meta name="author" content="Diary Analyzer">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Diary Analyzer - Beautiful Calendar Analytics">
+    <meta property="og:description" content="Beautiful time series visualization for your Google Calendar diary entries. Track productivity and gain insights.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://diary-analyzer.vercel.app">
+    
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Diary Analyzer - Beautiful Calendar Analytics">
+    <meta name="twitter:description" content="Beautiful time series visualization for your Google Calendar diary entries.">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="icons/icon16.svg">
+    <link rel="apple-touch-icon" href="icons/icon48.svg">
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="styles.css" as="style">
+    <link rel="preload" href="https://accounts.google.com/gsi/client" as="script">
+    
+    <!-- Stylesheet -->
     <link rel="stylesheet" href="styles.css">
+    
     <!-- Load Google API Client Library for proper OAuth -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
