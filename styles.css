@@ -157,6 +157,7 @@ body {
     box-shadow: 0 4px 16px rgba(102, 126, 234, 0.25);
     min-height: 5vh;
     min-width: 12vw;
+    width: 12vw;
     position: relative;
     overflow: hidden;
 }
@@ -1391,6 +1392,7 @@ body {
     
     .refresh-btn,
     .log-btn,
+    .random-recap-btn,
     .signout-btn {
         width: 100%;
         font-size: 1rem;
@@ -1579,6 +1581,7 @@ body {
     
     .refresh-btn,
     .log-btn,
+    .random-recap-btn,
     .signout-btn {
         font-size: 0.95rem;
         padding: 0.875rem 1.25rem;
@@ -1590,6 +1593,7 @@ body {
     /* Enhanced mobile button states for small screens */
     .refresh-btn:active,
     .log-btn:active,
+    .random-recap-btn:active,
     .signout-btn:active {
         transform: scale(0.96);
         transition: transform 0.1s ease;
@@ -1780,13 +1784,15 @@ body {
     height: 100%;
     background: rgba(0, 0, 0, 0.6);
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     z-index: 1000;
     backdrop-filter: blur(8px);
     opacity: 0;
     visibility: hidden;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    padding-top: 5vh;
+    overflow-y: auto;
 }
 
 .random-recap-modal:not(.hidden) {
