@@ -179,6 +179,15 @@ function setupEventListeners() {
         console.log('⚠️ Log button not found');
     }
     
+    // Sign out button
+    const signOutBtn = document.getElementById('signOutBtn');
+    if (signOutBtn) {
+        signOutBtn.addEventListener('click', signOut);
+        console.log('✅ Sign out button listener added');
+    } else {
+        console.log('⚠️ Sign out button not found');
+    }
+    
     console.log('🔧 Event listeners setup complete');
 }
 
@@ -193,14 +202,26 @@ async function checkAuthStatus() {
         console.log('💾 Stored token exists:', !!storedToken);
         console.log('💾 Stored token length:', storedToken ? storedToken.length : 0);
 
-        // FORCE RE-SIGNIN FOR TESTING - Remove this line when ready for production
-        const forceReSignin = true; // Set to false to allow stored tokens
+        // FORCE RE-SIGNIN FOR TESTING - Set to false for production to persist login
+        const forceReSignin = false; // Set to true only for testing/debugging
         
         if (storedToken && !forceReSignin) {
             console.log('✅ Found stored token, checking validity...');
             accessToken = storedToken;
             showSection('loading');
-            await loadCalendarData();
+            
+            try {
+                await loadCalendarData();
+                console.log('✅ Stored token is valid, user signed in automatically');
+                showSignOutButton();
+            } catch (error) {
+                console.log('❌ Stored token is invalid/expired, clearing and showing auth');
+                localStorage.removeItem('googleToken');
+                window.globalAccessToken = null;
+                window.accessToken = null;
+                showSection('auth');
+                hideSignOutButton();
+            }
         } else {
             if (forceReSignin) {
                 console.log('🔄 Force re-signin enabled for testing - clearing stored token');
@@ -356,6 +377,7 @@ window.loadCalendarData = async function loadCalendarData() {
         displayCurrentView();
         updateStats();
         updateCurrentDateDisplay();
+        showSignOutButton();
         showSection('content');
         
     } catch (error) {
@@ -1803,6 +1825,25 @@ style.textContent = `
         transform: translateY(-1px);
         box-shadow: 0 4px 8px rgba(99, 102, 241, 0.4);
     }
+    .signout-btn {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 16px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+    }
+    .signout-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(239, 68, 68, 0.4);
+    }
+    .hidden {
+        display: none !important;
+    }
     .log-modal {
         position: fixed;
         top: 0;
@@ -2125,4 +2166,38 @@ async function createCalendarEvent(eventData) {
     console.log('📅 Calendar ID:', result.organizer?.email || 'primary');
     console.log('📅 Full Event Data:', result);
     return result;
+}
+
+// Sign out functionality
+function signOut() {
+    console.log('🚪 Signing out...');
+    
+    // Clear stored tokens
+    localStorage.removeItem('googleToken');
+    window.globalAccessToken = null;
+    window.accessToken = null;
+    
+    // Hide sign out button
+    hideSignOutButton();
+    
+    // Show auth section
+    showSection('auth');
+    
+    console.log('✅ Signed out successfully');
+}
+
+// Show sign out button
+function showSignOutButton() {
+    const signOutBtn = document.getElementById('signOutBtn');
+    if (signOutBtn) {
+        signOutBtn.classList.remove('hidden');
+    }
+}
+
+// Hide sign out button
+function hideSignOutButton() {
+    const signOutBtn = document.getElementById('signOutBtn');
+    if (signOutBtn) {
+        signOutBtn.classList.add('hidden');
+    }
 }
