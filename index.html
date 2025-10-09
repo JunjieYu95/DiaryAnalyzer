@@ -139,6 +139,41 @@
                 </div>
             </section>
         </main>
+        
+        <!-- Random Recap Popup Modal -->
+        <div id="randomRecapModal" class="random-recap-modal hidden">
+            <div class="random-recap-modal-content">
+                <div class="random-recap-header">
+                    <h2>🎲 Random Recap</h2>
+                    <button class="random-recap-close" onclick="closeRandomRecapModal()">&times;</button>
+                </div>
+                
+                <div class="random-recap-settings">
+                    <h3>Settings</h3>
+                    <div class="random-recap-form-group">
+                        <label for="lookbackPeriod">Lookback Period:</label>
+                        <select id="lookbackPeriod" class="random-recap-lookback-select">
+                            <option value="7">1 Week</option>
+                            <option value="30">1 Month</option>
+                            <option value="90">3 Months</option>
+                            <option value="180">6 Months</option>
+                            <option value="365" selected>1 Year</option>
+                            <option value="730">2 Years</option>
+                        </select>
+                        <button id="generateRandomRecap" class="random-recap-generate-btn">🎲 Generate Random Day</button>
+                    </div>
+                </div>
+                
+                <div class="random-recap-content">
+                    <div class="random-recap-loading hidden">
+                        <div class="random-recap-loading-spinner"></div>
+                        <p>Finding a random day with activities...</p>
+                    </div>
+                    <div id="randomRecapResults"></div>
+                </div>
+            </div>
+        </div>
+        
         <footer class="app-footer">
             © 2024 Diary Analyzer. Made with ❤️ for productivity enthusiasts.
         </footer>
