@@ -1869,7 +1869,8 @@ style.textContent = `
         background: white;
         border-radius: 12px;
         padding: 30px;
-        max-width: 42vw;
+        max-width: 600px;
+        min-width: 500px;
         width: 90%;
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
     }
@@ -1890,8 +1891,8 @@ style.textContent = `
         cursor: pointer;
         color: #6b7280;
         padding: 0;
-        width: 2.5vw;
-        height: 2.5vw;
+        width: 40px;
+        height: 40px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1958,6 +1959,49 @@ style.textContent = `
     }
     .btn-secondary:hover {
         background: #4b5563;
+    }
+    
+    /* Mobile responsive styles for log modal */
+    @media (max-width: 768px) {
+        .log-modal-content {
+            max-width: 95vw;
+            min-width: 90vw;
+            padding: 20px;
+            margin: 10px;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            font-size: 16px; /* Prevent zoom on iOS */
+        }
+        
+        .modal-actions {
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 14px 24px;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .log-modal-content {
+            padding: 15px;
+            margin: 5px;
+        }
+        
+        .log-modal h2 {
+            font-size: 1.5rem;
+        }
+        
+        .close-btn {
+            width: 35px;
+            height: 35px;
+            font-size: 20px;
+        }
     }
 `;
 document.head.appendChild(style);
