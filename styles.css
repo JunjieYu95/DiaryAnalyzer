@@ -1778,26 +1778,40 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.6);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
-    backdrop-filter: blur(5px);
+    backdrop-filter: blur(8px);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.random-recap-modal:not(.hidden) {
+    opacity: 1;
+    visibility: visible;
 }
 
 .random-recap-modal-content {
     background: white;
     border-radius: 24px;
-    padding: 2rem;
+    padding: 2.5rem;
     max-width: 90vw;
     max-height: 90vh;
-    width: 800px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    width: 900px;
+    box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4);
     position: relative;
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    transform: scale(0.9) translateY(20px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.random-recap-modal:not(.hidden) .random-recap-modal-content {
+    transform: scale(1) translateY(0);
 }
 
 .random-recap-modal-content::before {
@@ -1810,15 +1824,17 @@ body {
     background: linear-gradient(90deg, #667eea, #764ba2, #667eea);
     background-size: 200% 100%;
     animation: gradientShift 3s ease-in-out infinite;
+    border-radius: 24px 24px 0 0;
 }
 
 .random-recap-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
-    padding-bottom: 1rem;
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
     border-bottom: 2px solid #f1f5f9;
+    position: relative;
 }
 
 .random-recap-header h2 {
@@ -1856,10 +1872,11 @@ body {
 
 .random-recap-settings {
     background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    border-radius: 16px;
-    padding: 1.5rem;
-    margin-bottom: 2rem;
+    border-radius: 20px;
+    padding: 2rem;
+    margin-bottom: 2.5rem;
     border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
 
 .random-recap-settings h3 {
@@ -1872,8 +1889,9 @@ body {
 .random-recap-form-group {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 1.5rem;
     flex-wrap: wrap;
+    justify-content: space-between;
 }
 
 .random-recap-form-group label {
@@ -1886,37 +1904,39 @@ body {
     background: white;
     border: 2px solid #e5e7eb;
     color: #374151;
-    padding: 0.75rem 1rem;
-    border-radius: 8px;
+    padding: 0.875rem 1.25rem;
+    border-radius: 12px;
     font-size: 1rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
-    min-width: 150px;
+    min-width: 180px;
 }
 
 .random-recap-lookback-select:focus {
     outline: none;
     border-color: #667eea;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    transform: translateY(-1px);
 }
 
 .random-recap-generate-btn {
     background: linear-gradient(135deg, #10b981 0%, #059669 100%);
     color: white;
     border: none;
-    padding: 0.75rem 1.5rem;
-    border-radius: 8px;
+    padding: 0.875rem 2rem;
+    border-radius: 12px;
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s;
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+    min-width: 200px;
 }
 
 .random-recap-generate-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
 }
 
 .random-recap-generate-btn:disabled {
@@ -1929,7 +1949,8 @@ body {
 .random-recap-content {
     flex: 1;
     overflow-y: auto;
-    min-height: 300px;
+    min-height: 400px;
+    padding: 1rem 0;
 }
 
 .random-recap-loading {
@@ -1973,10 +1994,11 @@ body {
 
 .random-recap-timeline {
     background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    border-radius: 16px;
-    padding: 1.5rem;
-    margin-top: 1rem;
+    border-radius: 20px;
+    padding: 2rem;
+    margin-top: 1.5rem;
     border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
 
 .random-recap-timeline h3 {
@@ -2017,11 +2039,29 @@ body {
 .random-recap-timeline-item {
     background: white;
     border-radius: 12px;
-    padding: 1rem;
+    padding: 1.25rem;
     margin-bottom: 1rem;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     border-left: 4px solid #667eea;
-    transition: all 0.2s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.random-recap-timeline-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(118, 75, 162, 0.02) 100%);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.random-recap-timeline-item:hover::before {
+    opacity: 1;
 }
 
 .random-recap-timeline-item:hover {

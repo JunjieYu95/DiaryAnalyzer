@@ -2363,55 +2363,44 @@ function hideSignOutButton() {
 function showRandomRecapModal() {
     console.log('🎲 Opening random recap modal...');
     
-    // Create modal HTML
-    const modalHTML = `
-        <div id="randomRecapModal" class="random-recap-modal">
-            <div class="random-recap-modal-content">
-                <div class="random-recap-header">
-                    <h2>🎲 Random Recap</h2>
-                    <button class="random-recap-close" onclick="closeRandomRecapModal()">&times;</button>
-                </div>
-                
-                <div class="random-recap-settings">
-                    <h3>Settings</h3>
-                    <div class="random-recap-form-group">
-                        <label for="lookbackPeriod">Lookback Period:</label>
-                        <select id="lookbackPeriod" class="random-recap-lookback-select">
-                            <option value="7">1 Week</option>
-                            <option value="30">1 Month</option>
-                            <option value="90">3 Months</option>
-                            <option value="180">6 Months</option>
-                            <option value="365" selected>1 Year</option>
-                            <option value="730">2 Years</option>
-                        </select>
-                        <button id="generateRandomRecap" class="random-recap-generate-btn">🎲 Generate Random Day</button>
-                    </div>
-                </div>
-                
-                <div class="random-recap-content">
-                    <div class="random-recap-loading hidden">
-                        <div class="random-recap-loading-spinner"></div>
-                        <p>Finding a random day with activities...</p>
-                    </div>
-                    <div id="randomRecapResults"></div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Add modal to page
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-    
-    // Add event listener for generate button
-    document.getElementById('generateRandomRecap').addEventListener('click', generateRandomRecap);
-    
-    console.log('✅ Random recap modal opened');
+    // Show the existing modal
+    const modal = document.getElementById('randomRecapModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        
+        // Add event listener for generate button if not already added
+        const generateBtn = document.getElementById('generateRandomRecap');
+        if (generateBtn && !generateBtn.hasAttribute('data-listener-added')) {
+            generateBtn.addEventListener('click', generateRandomRecap);
+            generateBtn.setAttribute('data-listener-added', 'true');
+        }
+        
+        // Add click-outside-to-close functionality
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                closeRandomRecapModal();
+            }
+        });
+        
+        // Add escape key to close
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                closeRandomRecapModal();
+                document.removeEventListener('keydown', handleEscape);
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+        
+        console.log('✅ Random recap modal opened');
+    } else {
+        console.error('❌ Random recap modal not found');
+    }
 }
 
 function closeRandomRecapModal() {
     const modal = document.getElementById('randomRecapModal');
     if (modal) {
-        modal.remove();
+        modal.classList.add('hidden');
         console.log('✅ Random recap modal closed');
     }
 }
