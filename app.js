@@ -444,7 +444,7 @@ async function fetchGoogleCalendarEvents(accessToken) {
         const timeMax = getDateRangeEnd();
 
         // Fetch events from all relevant calendars
-        let allEvents = [];
+        allEvents = [];
 
         for (const calendar of relevantCalendars) {
             console.log(`📅 Fetching events from: ${calendar.summary}`);
@@ -2039,9 +2039,8 @@ function getLastEventEndTime() {
     }
     
     // Find the most recent event by end time
-    const sortedEvents = allEvents
-        .filter(event => event.end && event.end.dateTime)
-        .sort((a, b) => new Date(b.end.dateTime) - new Date(a.end.dateTime));
+    const timedEvents = allEvents.filter(event => event.end && event.end.dateTime);
+    const sortedEvents = timedEvents.sort((a, b) => new Date(b.end.dateTime) - new Date(a.end.dateTime));
     
     if (sortedEvents.length === 0) {
         return null;
