@@ -170,21 +170,13 @@ function setupEventListeners() {
         console.error('❌ Next day button not found');
     }
     
-    // Chart mode selector for advanced analytics
-    const chartModeSelector = document.getElementById('chartMode');
-    if (chartModeSelector) {
-        chartModeSelector.addEventListener('change', onChartModeChange);
-        console.log('✅ Chart mode selector listener added');
+    // Log button for quick logging
+    const logButton = document.getElementById('logButton');
+    if (logButton) {
+        logButton.addEventListener('click', showLogModal);
+        console.log('✅ Log button listener added');
     } else {
-        console.log('⚠️ Chart mode selector not found (this is OK if not on advanced view)');
-    }
-    
-    const stackedChart = document.getElementById('stackedChart');
-    if (stackedChart) {
-        stackedChart.addEventListener('change', onChartModeChange);
-        console.log('✅ Stacked chart selector listener added');
-    } else {
-        console.log('⚠️ Stacked chart selector not found (this is OK if not on advanced view)');
+        console.log('⚠️ Log button not found');
     }
     
     console.log('🔧 Event listeners setup complete');
@@ -363,6 +355,7 @@ window.loadCalendarData = async function loadCalendarData() {
 
         displayCurrentView();
         updateStats();
+        updateCurrentDateDisplay();
         showSection('content');
         
     } catch (error) {
@@ -1171,23 +1164,28 @@ function formatTime(date) {
 
 // Update statistics
 function updateStats() {
-    const dayStart = new Date(currentDate);
-    dayStart.setHours(0, 0, 0, 0);
+    // Calculate stats based on the selected date range, not just current day
+    const startDate = getDateRangeStart();
+    const endDate = getDateRangeEnd();
+    const selectedRange = dateRange.value;
+    
+    console.log('📊 Updating stats for range:', selectedRange);
+    console.log('📅 Date range:', startDate.toLocaleDateString(), 'to', endDate.toLocaleDateString());
+    console.log('📊 Total events available:', allEvents.length);
 
-    const dayEnd = new Date(currentDate);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    const dayEvents = allEvents.filter(event => {
+    const rangeEvents = allEvents.filter(event => {
         const eventDate = new Date(event.start.dateTime || event.start.date);
-        return eventDate >= dayStart && eventDate <= dayEnd;
+        return eventDate >= startDate && eventDate <= endDate;
     });
+    
+    console.log('📊 Events in range:', rangeEvents.length);
 
     // Total events
-    totalEventsSpan.textContent = dayEvents.length;
+    totalEventsSpan.textContent = rangeEvents.length;
 
     // Active hours calculation
     let totalMinutes = 0;
-    dayEvents.forEach(event => {
+    rangeEvents.forEach(event => {
         if (event.start.dateTime && event.end.dateTime) {
             const start = new Date(event.start.dateTime);
             const end = new Date(event.end.dateTime);
@@ -1198,10 +1196,13 @@ function updateStats() {
     const hours = Math.floor(totalMinutes / 60);
     const minutes = Math.floor(totalMinutes % 60);
     activeHoursSpan.textContent = `${hours}h ${minutes}m`;
+    
+    console.log('⏰ Total minutes calculated:', totalMinutes);
+    console.log('⏰ Active hours display:', `${hours}h ${minutes}m`);
 
     // Most common activity
     const categories = {};
-    dayEvents.forEach(event => {
+    rangeEvents.forEach(event => {
         const category = categorizeEvent(event.summary);
         categories[category] = (categories[category] || 0) + 1;
     });
@@ -1299,6 +1300,7 @@ function onDateRangeChange() {
 function onViewModeChange() {
     console.log('👁️ View mode changed to:', viewMode.value);
     displayCurrentView();
+    updateStats(); // Also update stats when view mode changes
 }
 
 // Handle chart mode change
@@ -1326,12 +1328,48 @@ function displayCurrentView() {
     }
 }
 
-// Display advanced analytics (simplified version)
+// Display advanced analytics
 function displayAdvancedAnalytics() {
     console.log('📊 Displaying advanced analytics...');
-    // For now, just show a placeholder
-    const advancedCharts = document.getElementById('advancedCharts');
-    advancedCharts.innerHTML = '<div class="no-events">Advanced analytics coming soon!</div>';
+    
+    try {
+        const advancedCharts = document.getElementById('advancedCharts');
+        
+        if (!advancedCharts) {
+            console.error('❌ Advanced charts container not found');
+            return;
+        }
+        
+        // Clear previous content
+        advancedCharts.innerHTML = '';
+        
+        // Get the selected date range
+        const startDate = getDateRangeStart();
+        const endDate = getDateRangeEnd();
+        
+        // Filter events for the selected range
+        const rangeEvents = allEvents.filter(event => {
+            const eventDate = new Date(event.start.dateTime || event.start.date);
+            return eventDate >= startDate && eventDate <= endDate;
+        });
+        
+        console.log('📊 Range events for advanced analytics:', rangeEvents.length);
+        
+        if (rangeEvents.length === 0) {
+            advancedCharts.innerHTML = '<div class="no-events">No events found in this date range</div>';
+            return;
+        }
+        
+        // Create simple stacked bar chart
+        createSimpleStackedBarChart(rangeEvents, startDate, endDate);
+        
+    } catch (error) {
+        console.error('❌ Error in displayAdvancedAnalytics:', error);
+        const advancedCharts = document.getElementById('advancedCharts');
+        if (advancedCharts) {
+            advancedCharts.innerHTML = '<div class="no-events">Error loading advanced analytics: ' + error.message + '</div>';
+        }
+    }
 }
 
 // Refresh data
@@ -1373,6 +1411,225 @@ function showError(message) {
     showSection('error');
 }
 
+// Create simple stacked bar chart using CSS and HTML
+function createSimpleStackedBarChart(events, startDate, endDate) {
+    console.log('📊 Creating simple stacked bar chart...');
+    
+    const advancedCharts = document.getElementById('advancedCharts');
+    if (!advancedCharts) {
+        console.error('❌ Advanced charts container not found');
+        return;
+    }
+    
+    // Group events by date and calculate daily totals by category
+    const dailyData = {};
+    const currentDate = new Date(startDate);
+    
+    // Initialize all dates in range
+    while (currentDate <= endDate) {
+        const dateKey = getLocalDateKey(currentDate);
+        dailyData[dateKey] = {
+            date: new Date(currentDate),
+            displayDate: currentDate.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+            prod: 0,
+            nonprod: 0,
+            admin: 0,
+            other: 0,
+            total: 0
+        };
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    // Calculate daily totals by category
+    events.forEach(event => {
+        if (event.start.dateTime && event.end.dateTime) {
+            const eventDate = new Date(event.start.dateTime);
+            const dateKey = getLocalDateKey(eventDate);
+            
+            if (dailyData[dateKey]) {
+                const start = new Date(event.start.dateTime);
+                const end = new Date(event.end.dateTime);
+                const duration = (end - start) / (1000 * 60); // minutes
+                
+                const category = getCalendarKey(event.calendarName);
+                dailyData[dateKey][category] += duration;
+                dailyData[dateKey].total += duration;
+            }
+        }
+    });
+    
+    // Find max total for scaling
+    const maxTotal = Math.max(...Object.values(dailyData).map(day => day.total));
+    
+    if (maxTotal === 0) {
+        advancedCharts.innerHTML = '<div class="no-events">No timed events found in this date range</div>';
+        return;
+    }
+    
+    // Create chart HTML
+    let chartHTML = `
+        <div class="stacked-bar-chart">
+            <h4>Daily Activity Breakdown</h4>
+            <div class="chart-container">
+    `;
+    
+    const sortedDates = Object.keys(dailyData).sort();
+    const numDays = sortedDates.length;
+    
+    // Calculate dynamic bar width based on number of days
+    const maxBarWidth = 60;
+    const minBarWidth = 30;
+    const barWidth = Math.max(Math.min(maxBarWidth, Math.floor(400 / numDays)), minBarWidth);
+    
+    sortedDates.forEach(dateKey => {
+        const day = dailyData[dateKey];
+        
+        // Calculate percentages for vertical stacking (based on total for that day, not max)
+        const totalDayMinutes = day.total;
+        const prodPercent = totalDayMinutes > 0 ? (day.prod / totalDayMinutes) * 100 : 0;
+        const nonprodPercent = totalDayMinutes > 0 ? (day.nonprod / totalDayMinutes) * 100 : 0;
+        const adminPercent = totalDayMinutes > 0 ? (day.admin / totalDayMinutes) * 100 : 0;
+        const otherPercent = totalDayMinutes > 0 ? (day.other / totalDayMinutes) * 100 : 0;
+        
+        // Calculate bar height based on total time (max 200px)
+        const barHeight = maxTotal > 0 ? Math.max((totalDayMinutes / maxTotal) * 200, 20) : 20;
+        
+        // Format time display
+        const totalHours = Math.floor(day.total / 60);
+        const totalMinutes = Math.floor(day.total % 60);
+        const totalTimeStr = totalHours > 0 ? `${totalHours}h ${totalMinutes}m` : `${totalMinutes}m`;
+        
+        chartHTML += `
+            <div class="bar-group-vertical" style="min-width: ${barWidth + 20}px">
+                <div class="bar-label">${day.displayDate}</div>
+                <div class="bar-container-vertical">
+                    <div class="stacked-bar-vertical" style="height: ${barHeight}px; width: ${barWidth}px">
+                        ${day.nonprod > 0 ? `<div class="bar-segment-vertical nonprod" style="height: ${nonprodPercent}%" title="Non-Production: ${Math.floor(day.nonprod/60)}h ${Math.floor(day.nonprod%60)}m"></div>` : ''}
+                        ${day.admin > 0 ? `<div class="bar-segment-vertical admin" style="height: ${adminPercent}%" title="Admin & Rest: ${Math.floor(day.admin/60)}h ${Math.floor(day.admin%60)}m"></div>` : ''}
+                        ${day.prod > 0 ? `<div class="bar-segment-vertical prod" style="height: ${prodPercent}%" title="Production: ${Math.floor(day.prod/60)}h ${Math.floor(day.prod%60)}m"></div>` : ''}
+                    </div>
+                    <div class="bar-time">${totalTimeStr}</div>
+                </div>
+            </div>
+        `;
+    });
+    
+    chartHTML += `
+            </div>
+            <div class="chart-legend">
+                <div class="legend-item">
+                    <div class="legend-color prod"></div>
+                    <span>Production Work (Top)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color admin"></div>
+                    <span>Admin & Rest (Middle)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color nonprod"></div>
+                    <span>Non-Production (Bottom)</span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    advancedCharts.innerHTML = chartHTML;
+    console.log('✅ Simple stacked bar chart created successfully');
+}
+
+
+// Create simple data table as fallback
+function createSimpleDataTable(events, startDate, endDate) {
+    console.log('📊 Creating simple data table...');
+    
+    const advancedCharts = document.getElementById('advancedCharts');
+    if (!advancedCharts) return;
+    
+    // Group events by date
+    const dailyData = {};
+    const currentDate = new Date(startDate);
+    
+    // Initialize all dates in range
+    while (currentDate <= endDate) {
+        const dateKey = getLocalDateKey(currentDate);
+        dailyData[dateKey] = {
+            date: new Date(currentDate),
+            displayDate: currentDate.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+            events: [],
+            totalMinutes: 0
+        };
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    // Add events to dates
+    events.forEach(event => {
+        if (event.start.dateTime && event.end.dateTime) {
+            const eventDate = new Date(event.start.dateTime);
+            const dateKey = getLocalDateKey(eventDate);
+            
+            if (dailyData[dateKey]) {
+                const start = new Date(event.start.dateTime);
+                const end = new Date(event.end.dateTime);
+                const duration = (end - start) / (1000 * 60); // minutes
+                
+                dailyData[dateKey].events.push(event);
+                dailyData[dateKey].totalMinutes += duration;
+            }
+        }
+    });
+    
+    // Create table HTML
+    let tableHTML = `
+        <div class="data-table-container">
+            <h4>Daily Activity Summary</h4>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Events</th>
+                        <th>Total Time</th>
+                        <th>Categories</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    const sortedDates = Object.keys(dailyData).sort();
+    sortedDates.forEach(dateKey => {
+        const day = dailyData[dateKey];
+        const hours = Math.floor(day.totalMinutes / 60);
+        const minutes = Math.floor(day.totalMinutes % 60);
+        const timeStr = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+        
+        // Get category summary
+        const categories = {};
+        day.events.forEach(event => {
+            const category = categorizeEvent(event.summary);
+            categories[category] = (categories[category] || 0) + 1;
+        });
+        const categoryStr = Object.entries(categories)
+            .map(([cat, count]) => `${cat}(${count})`)
+            .join(', ');
+        
+        tableHTML += `
+            <tr>
+                <td>${day.displayDate}</td>
+                <td>${day.events.length}</td>
+                <td>${timeStr}</td>
+                <td>${categoryStr || 'N/A'}</td>
+            </tr>
+        `;
+    });
+    
+    tableHTML += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    advancedCharts.innerHTML = tableHTML;
+}
+
 // Add CSS for no events message
 const style = document.createElement('style');
 style.textContent = `
@@ -1382,5 +1639,466 @@ style.textContent = `
         padding: 40px 20px;
         font-style: italic;
     }
+    .advanced-charts {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    .advanced-charts canvas {
+        background: white;
+        border-radius: 8px;
+        padding: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .data-table-container {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+    .data-table th,
+    .data-table td {
+        padding: 8px 12px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+    }
+    .data-table th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+        color: #495057;
+    }
+    .data-table tr:hover {
+        background-color: #f8f9fa;
+    }
+    .stacked-bar-chart {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .chart-container {
+        margin: 20px 0;
+        display: flex;
+        align-items: end;
+        gap: 8px;
+        padding: 20px 0;
+        border-bottom: 1px solid #e5e7eb;
+        overflow-x: auto;
+        min-width: 100%;
+    }
+    .bar-group-vertical {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+        min-width: 60px;
+    }
+    .bar-label {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #666;
+        margin-bottom: 5px;
+    }
+    .bar-container-vertical {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+    }
+    .stacked-bar-vertical {
+        background: #f0f0f0;
+        border-radius: 4px 4px 0 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        min-height: 20px;
+    }
+    .bar-segment-vertical {
+        width: 100%;
+        transition: height 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .bar-segment-vertical.prod {
+        background: linear-gradient(180deg, #10b981, #059669);
+    }
+    .bar-segment-vertical.nonprod {
+        background: linear-gradient(180deg, #6b7280, #4b5563);
+    }
+    .bar-segment-vertical.admin {
+        background: linear-gradient(180deg, #f59e0b, #d97706);
+    }
+    .bar-segment-vertical.other {
+        background: linear-gradient(180deg, #e5e7eb, #d1d5db);
+    }
+    .bar-time {
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: #374151;
+        text-align: center;
+        min-height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .chart-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #e5e7eb;
+    }
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.9rem;
+    }
+    .legend-color {
+        width: 16px;
+        height: 16px;
+        border-radius: 3px;
+    }
+    .legend-color.prod {
+        background: linear-gradient(45deg, #10b981, #059669);
+    }
+    .legend-color.nonprod {
+        background: linear-gradient(45deg, #6b7280, #4b5563);
+    }
+    .legend-color.admin {
+        background: linear-gradient(45deg, #f59e0b, #d97706);
+    }
+    .legend-color.other {
+        background: linear-gradient(45deg, #e5e7eb, #d1d5db);
+    }
+    .controls {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .log-btn {
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 16px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3);
+    }
+    .log-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(99, 102, 241, 0.4);
+    }
+    .log-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+    .log-modal-content {
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        max-width: 500px;
+        width: 90%;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    }
+    .log-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .log-modal h2 {
+        margin: 0;
+        color: #1f2937;
+    }
+    .close-btn {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: #6b7280;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: background 0.2s;
+    }
+    .close-btn:hover {
+        background: #f3f4f6;
+    }
+    .form-group {
+        margin-bottom: 20px;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: #374151;
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.2s;
+        box-sizing: border-box;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: #6366f1;
+    }
+    .form-group textarea {
+        resize: vertical;
+        min-height: 80px;
+    }
+    .modal-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+        margin-top: 30px;
+    }
+    .btn {
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: none;
+    }
+    .btn-primary {
+        background: #6366f1;
+        color: white;
+    }
+    .btn-primary:hover {
+        background: #5b21b6;
+    }
+    .btn-secondary {
+        background: #6b7280;
+        color: white;
+    }
+    .btn-secondary:hover {
+        background: #4b5563;
+    }
 `;
 document.head.appendChild(style);
+
+// Log Modal Functions
+function showLogModal() {
+    console.log('📝 Opening log modal...');
+    
+    // Get the last event's end time as default start time
+    const lastEventEndTime = getLastEventEndTime();
+    const currentTime = new Date();
+    
+    // Format times for datetime-local input
+    const formatDateTimeLocal = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+    
+    const startTime = lastEventEndTime ? formatDateTimeLocal(lastEventEndTime) : formatDateTimeLocal(currentTime);
+    const endTime = formatDateTimeLocal(currentTime);
+    
+    // Create modal HTML
+    const modalHTML = `
+        <div id="logModal" class="log-modal">
+            <div class="log-modal-content">
+                <div class="log-modal-header">
+                    <h2>📝 Quick Log</h2>
+                    <button class="close-btn" onclick="closeLogModal()">&times;</button>
+                </div>
+                <form id="logForm">
+                    <div class="form-group">
+                        <label for="eventTitle">Event Title *</label>
+                        <input type="text" id="eventTitle" name="eventTitle" placeholder="e.g., Team Meeting, Code Review" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventCalendar">Calendar</label>
+                        <select id="eventCalendar" name="eventCalendar">
+                            <option value="Actual Diary - Prod">Production Work</option>
+                            <option value="Actual Diary - Nonprod">Non-Production</option>
+                            <option value="Actual Diary - Admin/Rest/Routine">Admin & Rest</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventStart">Start Time</label>
+                        <input type="datetime-local" id="eventStart" name="eventStart" value="${startTime}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventEnd">End Time</label>
+                        <input type="datetime-local" id="eventEnd" name="eventEnd" value="${endTime}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventDescription">Description (Optional)</label>
+                        <textarea id="eventDescription" name="eventDescription" placeholder="Add any additional details..."></textarea>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeLogModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Create Event</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Add form submit handler
+    document.getElementById('logForm').addEventListener('submit', handleLogSubmit);
+    
+    console.log('✅ Log modal opened with start time:', startTime, 'end time:', endTime);
+}
+
+function closeLogModal() {
+    const modal = document.getElementById('logModal');
+    if (modal) {
+        modal.remove();
+        console.log('✅ Log modal closed');
+    }
+}
+
+function getLastEventEndTime() {
+    if (!allEvents || allEvents.length === 0) {
+        return null;
+    }
+    
+    // Find the most recent event by end time
+    const sortedEvents = allEvents
+        .filter(event => event.end && event.end.dateTime)
+        .sort((a, b) => new Date(b.end.dateTime) - new Date(a.end.dateTime));
+    
+    if (sortedEvents.length === 0) {
+        return null;
+    }
+    
+    return new Date(sortedEvents[0].end.dateTime);
+}
+
+async function handleLogSubmit(event) {
+    event.preventDefault();
+    
+    const formData = new FormData(event.target);
+    const eventData = {
+        summary: formData.get('eventTitle'),
+        calendar: formData.get('eventCalendar'),
+        start: formData.get('eventStart'),
+        end: formData.get('eventEnd'),
+        description: formData.get('eventDescription') || ''
+    };
+    
+    console.log('📝 Creating event:', eventData);
+    
+    try {
+        // Show loading state
+        const submitBtn = event.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = 'Creating...';
+        submitBtn.disabled = true;
+        
+        // Create the event via Google Calendar API
+        await createCalendarEvent(eventData);
+        
+        // Success
+        console.log('✅ Event created successfully');
+        closeLogModal();
+        
+        // Refresh the data to show the new event
+        await loadCalendarData();
+        
+        // Show success message
+        alert('✅ Event created successfully!');
+        
+    } catch (error) {
+        console.error('❌ Failed to create event:', error);
+        alert('❌ Failed to create event: ' + error.message);
+        
+        // Reset button
+        const submitBtn = event.target.querySelector('button[type="submit"]');
+        submitBtn.textContent = 'Create Event';
+        submitBtn.disabled = false;
+    }
+}
+
+async function createCalendarEvent(eventData) {
+    const accessToken = getAccessToken();
+    if (!accessToken) {
+        throw new Error('No access token available. Please sign in again.');
+    }
+    
+    // Convert datetime-local to ISO string
+    const startDateTime = new Date(eventData.start).toISOString();
+    const endDateTime = new Date(eventData.end).toISOString();
+    
+    const eventPayload = {
+        summary: eventData.summary,
+        description: eventData.description,
+        start: {
+            dateTime: startDateTime,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+            dateTime: endDateTime,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        }
+    };
+    
+    console.log('📅 Creating event with payload:', eventPayload);
+    
+    // For now, we'll use the primary calendar
+    // In a full implementation, you'd want to support multiple calendars
+    const response = await fetch(
+        'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+        {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(eventPayload)
+        }
+    );
+    
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Failed to create event: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+    }
+    
+    const result = await response.json();
+    console.log('✅ Event created:', result);
+    return result;
+}
