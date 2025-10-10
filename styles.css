@@ -1202,129 +1202,87 @@ body {
     }
 }
 
-/* Mobile-specific improvements */
+/* Mobile-specific improvements - Enhanced for mobile framework */
 @media (max-width: 768px) {
-    /* Improve touch targets */
-    button, .nav-btn, .refresh-btn, .log-btn, .signout-btn, input, select {
-        min-height: 4.5vh;
-        min-width: 4vw;
+    /* Hide desktop-specific elements on mobile */
+    .app-header,
+    .controls,
+    .stats-container,
+    .date-navigation {
+        display: none !important;
     }
     
-    /* Prevent zoom on input focus */
-    input, select, textarea {
-        font-size: 16px;
+    /* Mobile framework overrides */
+    .mobile-hidden {
+        display: none !important;
     }
     
-    /* Improve scrolling on iOS */
-    .timeline-container,
-    .distribution-chart {
-        -webkit-overflow-scrolling: touch;
-    }
-    
-    /* Better tap highlighting */
-    button, .nav-btn, .refresh-btn, .log-btn, .signout-btn, .stat-card, .timeline-item, .calendar-bar {
-        -webkit-tap-highlight-color: rgba(102, 126, 234, 0.15);
-    }
-    
-    /* Prevent text selection on buttons */
-    button, .nav-btn, .refresh-btn, .log-btn, .signout-btn {
-        -webkit-user-select: none;
-        -moz-user-select: none;
-        -ms-user-select: none;
-        user-select: none;
-    }
-    
-    /* Improve touch interactions */
-    button, .nav-btn, .refresh-btn, .log-btn, .signout-btn, .stat-card, .timeline-item, .calendar-bar {
-        touch-action: manipulation;
-    }
-    
-    /* Better mobile spacing for controls */
-    .controls {
-        gap: 1.25rem;
-    }
-    
-    /* Improve mobile button spacing */
-    .refresh-btn,
-    .log-btn,
-    .signout-btn {
-        margin-bottom: 0.5rem;
-    }
-    
-    /* Enhanced mobile button states */
-    .refresh-btn:active,
-    .log-btn:active,
-    .signout-btn:active {
-        transform: scale(0.98);
-        transition: transform 0.1s ease;
-    }
-    
-    /* Better mobile form controls */
-    .date-selector:focus,
-    .view-selector:focus {
-        transform: scale(1.02);
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
-    }
-    
-    /* Improved mobile card interactions */
-    .stat-card:active {
-        transform: scale(0.98);
-        transition: transform 0.1s ease;
-    }
-    
-    /* Better mobile scrolling performance */
-    .timeline-container,
-    .distribution-chart,
-    .advanced-charts {
-        will-change: transform;
-        transform: translateZ(0);
-    }
-    
-    /* Enhanced mobile spacing */
-    .app-header {
-        padding: 1.5rem 0;
-    }
-    
-    /* Better mobile text readability */
-    .header-subtitle {
-        line-height: 1.6;
-    }
-    
-    /* Improved mobile button contrast */
-    .refresh-btn,
-    .log-btn,
-    .signout-btn {
-        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-    }
-    
-    .refresh-btn:hover,
-    .log-btn:hover,
-    .signout-btn:hover {
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-    }
-    
-    .header-content {
-        padding: 0 1rem;
-    }
-    
-    .app-main {
-        padding: 1rem;
-    }
-    
-    .content-section {
-        padding: 1.5rem;
+    /* Ensure mobile cards work properly */
+    .mobile-card {
         margin: 1rem 0;
     }
     
-    .stats-container {
-        gap: 1rem;
-        margin-top: 1.5rem;
-        margin-bottom: 1.5rem;
+    /* Mobile timeline adjustments */
+    .mobile-timeline {
+        padding-left: 2rem;
     }
     
-    .stat-card {
-        padding: 1.5rem 1.25rem;
-        min-height: 11vh;
+    .mobile-timeline::before {
+        left: 1rem;
+    }
+    
+    .mobile-timeline-item::before {
+        left: -1.5rem;
+    }
+    
+    /* Mobile chart adjustments */
+    .mobile-chart-container {
+        min-height: 200px;
+    }
+    
+    /* Mobile modal adjustments */
+    .mobile-modal {
+        align-items: flex-end;
+    }
+    
+    .mobile-modal-content {
+        border-radius: 1.5rem 1.5rem 0 0;
+        max-height: 90vh;
+    }
+    
+    /* Mobile bottom navigation spacing */
+    .mobile-bottom-nav {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+    
+    /* Mobile stats grid adjustments */
+    .mobile-stats-grid {
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 1rem;
+    }
+    
+    /* Mobile form adjustments */
+    .mobile-form-input,
+    .mobile-form-select {
+        font-size: 16px; /* Prevent zoom on iOS */
+    }
+    
+    /* Mobile button adjustments */
+    .mobile-btn {
+        min-height: 44px; /* iOS touch target minimum */
+    }
+    
+    /* Mobile card hover effects disabled for touch */
+    .mobile-card:hover {
+        transform: none;
+    }
+    
+    .mobile-stat-card:hover {
+        transform: none;
+    }
+    
+    .mobile-timeline-item:hover {
+        transform: none;
     }
 }
 

@@ -29,7 +29,9 @@
     <link rel="preload" href="styles.css" as="style">
     <link rel="preload" href="https://accounts.google.com/gsi/client" as="script">
     
-    <!-- Stylesheet -->
+    <!-- Mobile-First Framework -->
+    <link rel="stylesheet" href="mobile-framework.css">
+    <!-- Main Stylesheet -->
     <link rel="stylesheet" href="styles.css">
     
     <!-- Load Google API Client Library for proper OAuth -->
@@ -37,144 +39,207 @@
 </head>
 <body>
     <div class="app-container">
-        <header class="app-header">
-            <div class="header-content">
-                <h1>📊 Diary Analyzer</h1>
-                <p class="header-subtitle">Beautiful time series visualization for your Google Calendar diary entries</p>
-                <div class="controls">
-                    <select id="dateRange" class="date-selector">
-                        <option value="today">Today</option>
-                        <option value="week">This Week</option>
-                        <option value="month">This Month</option>
-                        <option value="quarter">This Quarter</option>
-                        <option value="year">This Year</option>
-                    </select>
-                    <select id="viewMode" class="view-selector">
-                        <option value="distribution">Distribution</option>
-                        <option value="timeline">Timeline</option>
-                        <option value="advanced">Advanced Analytics</option>
-                    </select>
-                    <button id="logButton" class="log-btn">📝 Quick Log</button>
-                    <button id="randomRecapBtn" class="random-recap-btn">🎲 Random Recap</button>
-                    <button id="refreshBtn" class="refresh-btn">🔄 Refresh</button>
-                    <button id="signOutBtn" class="signout-btn hidden">🚪 Sign Out</button>
+        <!-- Mobile Navigation -->
+        <nav class="mobile-nav">
+            <div class="mobile-nav-content">
+                <h1 class="mobile-nav-title">📊 Diary Analyzer</h1>
+                <div class="mobile-nav-actions">
+                    <button id="refreshBtn" class="mobile-btn mobile-btn-sm mobile-btn-secondary">🔄</button>
+                    <button id="signOutBtn" class="mobile-btn mobile-btn-sm mobile-btn-secondary hidden">🚪</button>
                 </div>
             </div>
-        </header>
+        </nav>
 
-        <main class="app-main">
+        <main class="app-main mobile-p-4">
             <!-- Auth Section -->
-            <section id="authSection" class="auth-section">
-                <div class="auth-card">
-                    <h2>📊 Welcome to Diary Analyzer</h2>
-                    <p>Sign in with your Google account to view and analyze your calendar diary entries</p>
+            <section id="authSection" class="mobile-card mobile-m-4">
+                <div class="mobile-card-body mobile-text-center">
+                    <h2 class="mobile-text-2xl mobile-font-bold mobile-mb-4">📊 Welcome to Diary Analyzer</h2>
+                    <p class="mobile-text-gray-600 mobile-mb-6">Sign in with your Google account to view and analyze your calendar diary entries</p>
                     
                     <!-- Custom Sign-In Button with OAuth Token Request -->
-                    <div id="buttonDiv"></div>
+                    <div id="buttonDiv" class="mobile-mb-4"></div>
                     
-                    <p class="auth-note">We only request read-only access to your calendar data</p>
+                    <p class="mobile-text-sm mobile-text-gray-500">We only request read-only access to your calendar data</p>
                 </div>
             </section>
 
             <!-- Loading Section -->
-            <section id="loadingSection" class="loading-section hidden">
-                    <div class="loading-spinner"></div>
-                <p id="loadingMessage">Loading your calendar data...</p>
-                <p id="loadingDetails" style="font-size: 0.85rem; color: #888; margin-top: 0.5rem;"></p>
+            <section id="loadingSection" class="mobile-card mobile-m-4 mobile-hidden">
+                <div class="mobile-card-body mobile-text-center">
+                    <div class="loading-spinner mobile-mx-auto mobile-mb-4"></div>
+                    <p id="loadingMessage" class="mobile-text-lg mobile-font-medium mobile-mb-2">Loading your calendar data...</p>
+                    <p id="loadingDetails" class="mobile-text-sm mobile-text-gray-500"></p>
+                </div>
             </section>
 
             <!-- Error Section -->
-            <section id="errorSection" class="error-section hidden">
-                <div class="error-card">
-                    <h2>⚠️ Something went wrong</h2>
-                    <p id="errorMessage"></p>
-                    <button id="retryBtn" class="retry-btn">Try Again</button>
+            <section id="errorSection" class="mobile-card mobile-m-4 mobile-hidden">
+                <div class="mobile-card-body mobile-text-center">
+                    <h2 class="mobile-text-xl mobile-font-bold mobile-text-error mobile-mb-4">⚠️ Something went wrong</h2>
+                    <p id="errorMessage" class="mobile-text-gray-600 mobile-mb-6"></p>
+                    <button id="retryBtn" class="mobile-btn mobile-btn-primary mobile-btn-full">Try Again</button>
                 </div>
             </section>
 
             <!-- Content Section -->
-            <section id="contentSection" class="content-section hidden">
-                <div class="stats-container">
-                    <div class="stat-card">
-                        <h3>Total Events</h3>
-                        <p id="totalEvents" class="stat-value">0</p>
+            <section id="contentSection" class="mobile-hidden">
+                <!-- Mobile Controls -->
+                <div class="mobile-card mobile-m-4">
+                    <div class="mobile-card-body">
+                        <div class="mobile-form-group mobile-mb-4">
+                            <label class="mobile-form-label">Date Range</label>
+                            <select id="dateRange" class="mobile-form-select">
+                                <option value="today">Today</option>
+                                <option value="week">This Week</option>
+                                <option value="month">This Month</option>
+                                <option value="quarter">This Quarter</option>
+                                <option value="year">This Year</option>
+                            </select>
+                        </div>
+                        <div class="mobile-form-group mobile-mb-4">
+                            <label class="mobile-form-label">View Mode</label>
+                            <select id="viewMode" class="mobile-form-select">
+                                <option value="distribution">Distribution</option>
+                                <option value="timeline">Timeline</option>
+                                <option value="advanced">Advanced Analytics</option>
+                            </select>
+                        </div>
+                        <div class="mobile-flex mobile-flex-wrap mobile-gap-2">
+                            <button id="logButton" class="mobile-btn mobile-btn-primary mobile-btn-sm">📝 Quick Log</button>
+                            <button id="randomRecapBtn" class="mobile-btn mobile-btn-success mobile-btn-sm">🎲 Random Recap</button>
+                        </div>
                     </div>
-                    <div class="stat-card">
-                        <h3>Active Hours</h3>
-                        <p id="activeHours" class="stat-value">0h 0m</p>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Most Common</h3>
-                        <p id="mostCommon" class="stat-value">-</p>
                 </div>
-            </div>
 
-                <!-- Navigation -->
-                <div class="date-navigation">
-                    <button id="prevDay" class="nav-btn">← Prev</button>
-                    <span id="currentDate" class="current-date">Today</span>
-                    <button id="nextDay" class="nav-btn">Next →</button>
+                <!-- Mobile Stats -->
+                <div class="mobile-stats-grid mobile-m-4">
+                    <div class="mobile-stat-card">
+                        <div id="totalEvents" class="mobile-stat-value">0</div>
+                        <div class="mobile-stat-label">Total Events</div>
+                    </div>
+                    <div class="mobile-stat-card">
+                        <div id="activeHours" class="mobile-stat-value">0h 0m</div>
+                        <div class="mobile-stat-label">Active Hours</div>
+                    </div>
+                    <div class="mobile-stat-card">
+                        <div id="mostCommon" class="mobile-stat-value">-</div>
+                        <div class="mobile-stat-label">Most Common</div>
+                    </div>
+                </div>
+
+                <!-- Mobile Date Navigation -->
+                <div class="mobile-card mobile-m-4">
+                    <div class="mobile-card-body">
+                        <div class="mobile-flex mobile-justify-between mobile-items-center">
+                            <button id="prevDay" class="mobile-btn mobile-btn-secondary mobile-btn-sm">← Prev</button>
+                            <span id="currentDate" class="mobile-text-lg mobile-font-semibold mobile-text-center">Today</span>
+                            <button id="nextDay" class="mobile-btn mobile-btn-secondary mobile-btn-sm">Next →</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Timeline View -->
-                <div id="timelineContainer" class="timeline-container hidden">
-                    <h3>Timeline</h3>
-                    <div id="timeline" class="timeline"></div>
+                <div id="timelineContainer" class="mobile-card mobile-m-4 mobile-hidden">
+                    <div class="mobile-card-header">
+                        <h3 class="mobile-text-xl mobile-font-bold mobile-text-center">Timeline</h3>
+                    </div>
+                    <div class="mobile-card-body">
+                        <div id="timeline" class="mobile-timeline"></div>
+                    </div>
                 </div>
 
                 <!-- Distribution View -->
-                <div id="distributionContainer" class="distribution-container">
-                    <h3>Time Distribution</h3>
-                    <p class="distribution-subtitle">Daily time distribution by calendar</p>
-                    <div id="distributionChart" class="distribution-chart"></div>
-                    <div id="distributionStats" class="distribution-stats"></div>
+                <div id="distributionContainer" class="mobile-card mobile-m-4">
+                    <div class="mobile-card-header">
+                        <h3 class="mobile-text-xl mobile-font-bold mobile-text-center">Time Distribution</h3>
+                        <p class="mobile-text-sm mobile-text-gray-500 mobile-text-center mobile-mt-2">Daily time distribution by calendar</p>
+                    </div>
+                    <div class="mobile-card-body">
+                        <div id="distributionChart" class="mobile-chart-container">
+                            <div class="mobile-chart-content">
+                                <!-- Chart will be rendered here -->
+                            </div>
+                        </div>
+                        <div id="distributionStats" class="mobile-stats-grid mobile-mt-4"></div>
+                    </div>
                 </div>
 
                 <!-- Advanced Analytics View -->
-                <div id="advancedContainer" class="advanced-container hidden">
-                    <h3>Advanced Analytics</h3>
-                    <div id="advancedCharts" class="advanced-charts">
-                        <!-- Charts will be dynamically inserted here -->
+                <div id="advancedContainer" class="mobile-card mobile-m-4 mobile-hidden">
+                    <div class="mobile-card-header">
+                        <h3 class="mobile-text-xl mobile-font-bold mobile-text-center">Advanced Analytics</h3>
+                    </div>
+                    <div class="mobile-card-body">
+                        <div id="advancedCharts" class="mobile-chart-container">
+                            <!-- Charts will be dynamically inserted here -->
+                        </div>
                     </div>
                 </div>
             </section>
         </main>
         
-        <!-- Random Recap Popup Modal -->
-        <div id="randomRecapModal" class="random-recap-modal hidden">
-            <div class="random-recap-modal-content">
-                <div class="random-recap-header">
-                    <h2>🎲 Random Recap</h2>
-                    <button class="random-recap-close" onclick="closeRandomRecapModal()">&times;</button>
+        <!-- Random Recap Mobile Modal -->
+        <div id="randomRecapModal" class="mobile-modal mobile-hidden">
+            <div class="mobile-modal-content">
+                <div class="mobile-modal-header">
+                    <h2 class="mobile-modal-title">🎲 Random Recap</h2>
+                    <button class="mobile-modal-close" onclick="closeRandomRecapModal()">&times;</button>
                 </div>
                 
-                <div class="random-recap-settings">
-                    <h3>Settings</h3>
-                    <div class="random-recap-form-group">
-                        <label for="lookbackPeriod">Lookback Period:</label>
-                        <select id="lookbackPeriod" class="random-recap-lookback-select">
-                            <option value="7">1 Week</option>
-                            <option value="30">1 Month</option>
-                            <option value="90">3 Months</option>
-                            <option value="180">6 Months</option>
-                            <option value="365" selected>1 Year</option>
-                            <option value="730">2 Years</option>
-                        </select>
-                        <button id="generateRandomRecap" class="random-recap-generate-btn">🎲 Generate Random Day</button>
+                <div class="mobile-modal-body">
+                    <div class="mobile-card mobile-mb-4">
+                        <div class="mobile-card-body">
+                            <h3 class="mobile-text-lg mobile-font-semibold mobile-mb-4">Settings</h3>
+                            <div class="mobile-form-group mobile-mb-4">
+                                <label for="lookbackPeriod" class="mobile-form-label">Lookback Period</label>
+                                <select id="lookbackPeriod" class="mobile-form-select">
+                                    <option value="7">1 Week</option>
+                                    <option value="30">1 Month</option>
+                                    <option value="90">3 Months</option>
+                                    <option value="180">6 Months</option>
+                                    <option value="365" selected>1 Year</option>
+                                    <option value="730">2 Years</option>
+                                </select>
+                            </div>
+                            <button id="generateRandomRecap" class="mobile-btn mobile-btn-success mobile-btn-full">🎲 Generate Random Day</button>
+                        </div>
                     </div>
-                </div>
-                
-                <div class="random-recap-content">
-                    <div class="random-recap-loading hidden">
-                        <div class="random-recap-loading-spinner"></div>
-                        <p>Finding a random day with activities...</p>
+                    
+                    <div class="random-recap-loading mobile-hidden">
+                        <div class="mobile-text-center mobile-p-8">
+                            <div class="loading-spinner mobile-mx-auto mobile-mb-4"></div>
+                            <p class="mobile-text-gray-600">Finding a random day with activities...</p>
+                        </div>
                     </div>
                     <div id="randomRecapResults"></div>
                 </div>
             </div>
         </div>
         
-        <footer class="app-footer">
+        <!-- Mobile Bottom Navigation -->
+        <nav class="mobile-bottom-nav">
+            <div class="mobile-bottom-nav-content">
+                <a href="#" class="mobile-bottom-nav-item active" data-view="distribution">
+                    <div class="mobile-bottom-nav-icon">📊</div>
+                    <div class="mobile-bottom-nav-label">Distribution</div>
+                </a>
+                <a href="#" class="mobile-bottom-nav-item" data-view="timeline">
+                    <div class="mobile-bottom-nav-icon">📅</div>
+                    <div class="mobile-bottom-nav-label">Timeline</div>
+                </a>
+                <a href="#" class="mobile-bottom-nav-item" data-view="advanced">
+                    <div class="mobile-bottom-nav-icon">📈</div>
+                    <div class="mobile-bottom-nav-label">Analytics</div>
+                </a>
+                <a href="#" class="mobile-bottom-nav-item" data-action="random-recap">
+                    <div class="mobile-bottom-nav-icon">🎲</div>
+                    <div class="mobile-bottom-nav-label">Random</div>
+                </a>
+            </div>
+        </nav>
+        
+        <footer class="mobile-text-center mobile-p-4 mobile-text-white mobile-text-sm">
             © 2024 Diary Analyzer. Made with ❤️ for productivity enthusiasts.
         </footer>
     </div>
@@ -373,6 +438,8 @@
         }
     </script>
     
+    <!-- Load mobile app.js first -->
+    <script src="mobile-app.js"></script>
     <!-- Load app.js WITHOUT defer so it's available when we need it -->
     <!-- Cache busting: add timestamp to force reload -->
     <script src="app.js?v=20250117-1610"></script>

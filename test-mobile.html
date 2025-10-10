@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Framework Test</title>
+    <link rel="stylesheet" href="mobile-framework.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Mobile Navigation -->
+        <nav class="mobile-nav">
+            <div class="mobile-nav-content">
+                <h1 class="mobile-nav-title">📊 Mobile Test</h1>
+                <div class="mobile-nav-actions">
+                    <button class="mobile-btn mobile-btn-sm mobile-btn-secondary">🔄</button>
+                </div>
+            </div>
+        </nav>
+
+        <main class="app-main mobile-p-4">
+            <!-- Mobile Card Test -->
+            <div class="mobile-card mobile-m-4">
+                <div class="mobile-card-header">
+                    <h2 class="mobile-text-xl mobile-font-bold">Mobile Card Test</h2>
+                </div>
+                <div class="mobile-card-body">
+                    <p class="mobile-text-gray-600 mobile-mb-4">This is a test of the mobile framework components.</p>
+                    
+                    <!-- Mobile Form Test -->
+                    <div class="mobile-form-group mobile-mb-4">
+                        <label class="mobile-form-label">Test Select</label>
+                        <select class="mobile-form-select">
+                            <option>Option 1</option>
+                            <option>Option 2</option>
+                            <option>Option 3</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Mobile Buttons Test -->
+                    <div class="mobile-flex mobile-gap-2 mobile-mb-4">
+                        <button class="mobile-btn mobile-btn-primary mobile-btn-sm">Primary</button>
+                        <button class="mobile-btn mobile-btn-secondary mobile-btn-sm">Secondary</button>
+                        <button class="mobile-btn mobile-btn-success mobile-btn-sm">Success</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile Stats Test -->
+            <div class="mobile-stats-grid mobile-m-4">
+                <div class="mobile-stat-card">
+                    <div class="mobile-stat-value">42</div>
+                    <div class="mobile-stat-label">Total Events</div>
+                </div>
+                <div class="mobile-stat-card">
+                    <div class="mobile-stat-value">8h 30m</div>
+                    <div class="mobile-stat-label">Active Hours</div>
+                </div>
+                <div class="mobile-stat-card">
+                    <div class="mobile-stat-value">Work</div>
+                    <div class="mobile-stat-label">Most Common</div>
+                </div>
+            </div>
+
+            <!-- Mobile Timeline Test -->
+            <div class="mobile-card mobile-m-4">
+                <div class="mobile-card-header">
+                    <h3 class="mobile-text-xl mobile-font-bold">Timeline Test</h3>
+                </div>
+                <div class="mobile-card-body">
+                    <div class="mobile-timeline">
+                        <div class="mobile-timeline-item">
+                            <div class="mobile-timeline-time">9:00 AM - 10:00 AM</div>
+                            <div class="mobile-timeline-title">Morning Meeting</div>
+                            <div class="mobile-timeline-description">Team standup and planning</div>
+                        </div>
+                        <div class="mobile-timeline-item">
+                            <div class="mobile-timeline-time">10:30 AM - 12:00 PM</div>
+                            <div class="mobile-timeline-title">Development Work</div>
+                            <div class="mobile-timeline-description">Working on new features</div>
+                        </div>
+                        <div class="mobile-timeline-item">
+                            <div class="mobile-timeline-time">1:00 PM - 2:00 PM</div>
+                            <div class="mobile-timeline-title">Lunch Break</div>
+                            <div class="mobile-timeline-description">Time for lunch and relaxation</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Mobile Bottom Navigation -->
+        <nav class="mobile-bottom-nav">
+            <div class="mobile-bottom-nav-content">
+                <a href="#" class="mobile-bottom-nav-item active">
+                    <div class="mobile-bottom-nav-icon">📊</div>
+                    <div class="mobile-bottom-nav-label">Distribution</div>
+                </a>
+                <a href="#" class="mobile-bottom-nav-item">
+                    <div class="mobile-bottom-nav-icon">📅</div>
+                    <div class="mobile-bottom-nav-label">Timeline</div>
+                </a>
+                <a href="#" class="mobile-bottom-nav-item">
+                    <div class="mobile-bottom-nav-icon">📈</div>
+                    <div class="mobile-bottom-nav-label">Analytics</div>
+                </a>
+                <a href="#" class="mobile-bottom-nav-item">
+                    <div class="mobile-bottom-nav-icon">🎲</div>
+                    <div class="mobile-bottom-nav-label">Random</div>
+                </a>
+            </div>
+        </nav>
+    </div>
+
+    <script>
+        // Test mobile interactions
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('📱 Mobile framework test loaded');
+            
+            // Test button interactions
+            const buttons = document.querySelectorAll('.mobile-btn');
+            buttons.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    console.log('Button clicked:', btn.textContent);
+                });
+            });
+            
+            // Test bottom navigation
+            const navItems = document.querySelectorAll('.mobile-bottom-nav-item');
+            navItems.forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    navItems.forEach(nav => nav.classList.remove('active'));
+                    item.classList.add('active');
+                    console.log('Navigation changed to:', item.querySelector('.mobile-bottom-nav-label').textContent);
+                });
+            });
+        });
+    </script>
+</body>
+</html>
