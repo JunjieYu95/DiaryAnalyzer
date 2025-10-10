@@ -274,21 +274,20 @@ function debugGoogleSignInSetup() {
     console.log('🔑 Client ID from CONFIG:', CONFIG.GOOGLE_CLIENT_ID);
     console.log('🔑 Client ID from HTML element:');
     
-    const gIdOnload = document.getElementById('g_id_onload');
-    if (gIdOnload) {
-        console.log('📋 g_id_onload element found:', gIdOnload);
-        console.log('📋 data-client_id:', gIdOnload.getAttribute('data-client_id'));
-        console.log('📋 data-callback:', gIdOnload.getAttribute('data-callback'));
-        console.log('📋 data-ux_mode:', gIdOnload.getAttribute('data-ux_mode'));
+    // Check OAuth button container (new GSI OAuth 2.0)
+    const buttonDiv = document.getElementById('buttonDiv');
+    if (buttonDiv) {
+        console.log('📋 OAuth button container found:', buttonDiv);
+        console.log('📋 Button container children:', buttonDiv.children.length);
     } else {
-        console.error('❌ g_id_onload element not found!');
+        console.error('❌ OAuth button container not found!');
     }
     
-    const gIdSignin = document.querySelector('.g_id_signin');
-    if (gIdSignin) {
-        console.log('📋 g_id_signin element found:', gIdSignin);
+    // Check if Google Identity Services is available
+    if (typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+        console.log('✅ Google Identity Services OAuth 2.0 is available');
     } else {
-        console.error('❌ g_id_signin element not found!');
+        console.warn('⚠️ Google Identity Services not fully loaded yet');
     }
     
     console.log('🔧 Callback function available:', typeof window.handleCredentialResponse);
@@ -319,11 +318,13 @@ window.debugAuth = function() {
         length: localStorage.getItem('googleToken')?.length || 0
     });
     
-    // Check if Google Sign-In button is clickable
-    const signinBtn = document.querySelector('.g_id_signin');
-    if (signinBtn) {
-        console.log('🔘 Sign-in button found and clickable:', !signinBtn.disabled);
-        console.log('🔘 Button parent element:', signinBtn.parentElement);
+    // Check if OAuth button is ready
+    const oauthButton = document.querySelector('#buttonDiv button');
+    if (oauthButton) {
+        console.log('🔘 OAuth button found and clickable:', !oauthButton.disabled);
+        console.log('🔘 Button parent element:', oauthButton.parentElement);
+    } else {
+        console.log('🔘 OAuth button not yet rendered (will be created by GSI)');
     }
     
     console.log('🔧 === END MANUAL DEBUG ===');
