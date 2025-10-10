@@ -127,6 +127,27 @@ class MobileApp {
         if (viewModeSelect) {
             viewModeSelect.value = viewName;
         }
+
+        // Call the appropriate display function directly
+        if (viewName === 'timeline') {
+            if (typeof window.displayTimeline === 'function') {
+                window.displayTimeline();
+            } else if (typeof displayTimeline === 'function') {
+                displayTimeline();
+            }
+        } else if (viewName === 'distribution') {
+            if (typeof window.displayDistribution === 'function') {
+                window.displayDistribution();
+            } else if (typeof displayDistribution === 'function') {
+                displayDistribution();
+            }
+        } else if (viewName === 'advanced') {
+            if (typeof window.displayAdvancedAnalytics === 'function') {
+                window.displayAdvancedAnalytics();
+            } else if (typeof displayAdvancedAnalytics === 'function') {
+                displayAdvancedAnalytics();
+            }
+        }
     }
 
     // Update Bottom Navigation Active State

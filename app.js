@@ -18,30 +18,15 @@ if (typeof CONFIG === 'undefined') {
     throw new Error('CONFIG not loaded. See console for details.');
 }
 
-// DOM elements
-const authSection = document.getElementById('authSection');
-const loadingSection = document.getElementById('loadingSection');
-const contentSection = document.getElementById('contentSection');
-const errorSection = document.getElementById('errorSection');
-const refreshBtn = document.getElementById('refreshBtn');
-const retryBtn = document.getElementById('retryBtn');
-const dateRange = document.getElementById('dateRange');
-const viewMode = document.getElementById('viewMode');
-const prevDayBtn = document.getElementById('prevDay');
-const nextDayBtn = document.getElementById('nextDay');
-const currentDateSpan = document.getElementById('currentDate');
-const timeline = document.getElementById('timeline');
-const timelineContainer = document.getElementById('timelineContainer');
-const distributionContainer = document.getElementById('distributionContainer');
-const distributionChart = document.getElementById('distributionChart');
-const distributionStats = document.getElementById('distributionStats');
-const totalEventsSpan = document.getElementById('totalEvents');
-const activeHoursSpan = document.getElementById('activeHours');
-const mostCommonSpan = document.getElementById('mostCommon');
-const errorMessage = document.getElementById('errorMessage');
+// DOM elements - will be initialized when DOM is ready
+let authSection, loadingSection, contentSection, errorSection;
+let refreshBtn, retryBtn, dateRange, viewMode;
+let prevDayBtn, nextDayBtn, currentDateSpan, timeline;
+let timelineContainer, distributionContainer, distributionChart, distributionStats;
+let totalEventsSpan, activeHoursSpan, mostCommonSpan, errorMessage;
 
 // Mobile-specific elements
-const mobileApp = window.mobileApp;
+let mobileApp;
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', async () => {
@@ -50,6 +35,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('🔑 Client ID configured:', CONFIG.GOOGLE_CLIENT_ID);
     console.log('🌐 Current origin:', window.location.origin);
     console.log('📱 User agent:', navigator.userAgent);
+    
+    // Initialize DOM elements
+    authSection = document.getElementById('authSection');
+    loadingSection = document.getElementById('loadingSection');
+    contentSection = document.getElementById('contentSection');
+    errorSection = document.getElementById('errorSection');
+    refreshBtn = document.getElementById('refreshBtn');
+    retryBtn = document.getElementById('retryBtn');
+    dateRange = document.getElementById('dateRange');
+    viewMode = document.getElementById('viewMode');
+    prevDayBtn = document.getElementById('prevDay');
+    nextDayBtn = document.getElementById('nextDay');
+    currentDateSpan = document.getElementById('currentDate');
+    timeline = document.getElementById('timeline');
+    timelineContainer = document.getElementById('timelineContainer');
+    distributionContainer = document.getElementById('distributionContainer');
+    distributionChart = document.getElementById('distributionChart');
+    distributionStats = document.getElementById('distributionStats');
+    totalEventsSpan = document.getElementById('totalEvents');
+    activeHoursSpan = document.getElementById('activeHours');
+    mostCommonSpan = document.getElementById('mostCommon');
+    errorMessage = document.getElementById('errorMessage');
+    
+    // Initialize mobile app reference
+    mobileApp = window.mobileApp;
     
     // Check if authentication completed before app loaded
     if (window.authCompleted || window.globalAccessToken) {
@@ -708,11 +718,15 @@ function createTimelineItem(event) {
 
 // Display distribution analysis
 function displayDistribution() {
-    const range = dateRange.value;
+    const range = dateRange?.value || 'today';
+    console.log('📊 Displaying distribution for range:', range);
+    console.log('📊 Total events available:', allEvents.length);
 
     if (range === 'today') {
+        console.log('📅 Showing daily distribution');
         displayDailyDistribution();
     } else {
+        console.log('📊 Showing stacked distribution');
         displayStackedDistribution();
     }
 }
@@ -1374,27 +1388,30 @@ function onChartModeChange() {
 
 // Display current view based on selected mode
 function displayCurrentView() {
-    const selectedView = viewMode.value;
-
-    // Use mobile app view switching if available
-    if (mobileApp && mobileApp.switchView) {
-        mobileApp.switchView(selectedView);
-        return;
-    }
+    const selectedView = viewMode?.value || 'distribution';
+    console.log('📊 Displaying current view:', selectedView);
+    console.log('🔍 View containers available:', {
+        timelineContainer: !!timelineContainer,
+        distributionContainer: !!distributionContainer,
+        advancedContainer: !!document.getElementById('advancedContainer')
+    });
 
     // Fallback to original view switching
-    timelineContainer.classList.add('mobile-hidden');
-    distributionContainer.classList.add('mobile-hidden');
-    document.getElementById('advancedContainer').classList.add('mobile-hidden');
+    timelineContainer?.classList.add('mobile-hidden');
+    distributionContainer?.classList.add('mobile-hidden');
+    document.getElementById('advancedContainer')?.classList.add('mobile-hidden');
 
     if (selectedView === 'timeline') {
-        timelineContainer.classList.remove('mobile-hidden');
+        timelineContainer?.classList.remove('mobile-hidden');
+        console.log('📅 Showing timeline view');
         displayTimeline();
     } else if (selectedView === 'distribution') {
-        distributionContainer.classList.remove('mobile-hidden');
+        distributionContainer?.classList.remove('mobile-hidden');
+        console.log('📊 Showing distribution view');
         displayDistribution();
     } else if (selectedView === 'advanced') {
-        document.getElementById('advancedContainer').classList.remove('mobile-hidden');
+        document.getElementById('advancedContainer')?.classList.remove('mobile-hidden');
+        console.log('📈 Showing advanced analytics view');
         displayAdvancedAnalytics();
     }
 }
@@ -1455,23 +1472,35 @@ async function refreshData() {
 
 // Show specific section
 function showSection(section) {
-    authSection.classList.add('mobile-hidden');
-    loadingSection.classList.add('mobile-hidden');
-    contentSection.classList.add('mobile-hidden');
-    errorSection.classList.add('mobile-hidden');
+    console.log('🔄 Showing section:', section);
+    console.log('🔍 DOM elements available:', {
+        authSection: !!authSection,
+        loadingSection: !!loadingSection,
+        contentSection: !!contentSection,
+        errorSection: !!errorSection
+    });
+    
+    authSection?.classList.add('mobile-hidden');
+    loadingSection?.classList.add('mobile-hidden');
+    contentSection?.classList.add('mobile-hidden');
+    errorSection?.classList.add('mobile-hidden');
 
     switch (section) {
         case 'auth':
-            authSection.classList.remove('mobile-hidden');
+            authSection?.classList.remove('mobile-hidden');
+            console.log('✅ Auth section shown');
             break;
         case 'loading':
-            loadingSection.classList.remove('mobile-hidden');
+            loadingSection?.classList.remove('mobile-hidden');
+            console.log('✅ Loading section shown');
             break;
         case 'content':
-            contentSection.classList.remove('mobile-hidden');
+            contentSection?.classList.remove('mobile-hidden');
+            console.log('✅ Content section shown');
             break;
         case 'error':
-            errorSection.classList.remove('mobile-hidden');
+            errorSection?.classList.remove('mobile-hidden');
+            console.log('✅ Error section shown');
             break;
     }
 }
