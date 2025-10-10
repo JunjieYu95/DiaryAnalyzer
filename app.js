@@ -40,6 +40,9 @@ const activeHoursSpan = document.getElementById('activeHours');
 const mostCommonSpan = document.getElementById('mostCommon');
 const errorMessage = document.getElementById('errorMessage');
 
+// Mobile-specific elements
+const mobileApp = window.mobileApp;
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Diary Analyzer Web App loaded!');
@@ -649,7 +652,7 @@ function getDateRangeEnd() {
 function displayTimeline() {
     const dayStart = new Date(currentDate);
     dayStart.setHours(0, 0, 0, 0);
-
+    
     const dayEnd = new Date(currentDate);
     dayEnd.setHours(23, 59, 59, 999);
 
@@ -658,6 +661,13 @@ function displayTimeline() {
         return eventDate >= dayStart && eventDate <= dayEnd;
     });
 
+    // Use mobile app timeline rendering if available
+    if (mobileApp && mobileApp.renderMobileTimeline) {
+        mobileApp.renderMobileTimeline(dayEvents);
+        return;
+    }
+
+    // Fallback to original timeline rendering
     timeline.innerHTML = '';
 
     if (dayEvents.length === 0) {
@@ -1220,8 +1230,12 @@ function updateStats() {
     
     console.log('📊 Events in range:', rangeEvents.length);
 
-    // Total events
-    totalEventsSpan.textContent = rangeEvents.length;
+    // Calculate stats
+    const stats = {
+        totalEvents: rangeEvents.length,
+        activeHours: 0,
+        mostCommon: '-'
+    };
 
     // Active hours calculation
     let totalMinutes = 0;
@@ -1235,10 +1249,10 @@ function updateStats() {
 
     const hours = Math.floor(totalMinutes / 60);
     const minutes = Math.floor(totalMinutes % 60);
-    activeHoursSpan.textContent = `${hours}h ${minutes}m`;
+    stats.activeHours = `${hours}h ${minutes}m`;
     
     console.log('⏰ Total minutes calculated:', totalMinutes);
-    console.log('⏰ Active hours display:', `${hours}h ${minutes}m`);
+    console.log('⏰ Active hours display:', stats.activeHours);
 
     // Most common activity
     const categories = {};
@@ -1256,7 +1270,17 @@ function updateStats() {
         );
     }
 
-    mostCommonSpan.textContent = mostCommon ? mostCommon[0] : '-';
+    stats.mostCommon = mostCommon ? mostCommon[0] : '-';
+
+    // Update mobile stats if available
+    if (mobileApp && mobileApp.renderMobileStats) {
+        mobileApp.renderMobileStats(stats);
+    }
+
+    // Fallback to original stats update
+    totalEventsSpan.textContent = stats.totalEvents;
+    activeHoursSpan.textContent = stats.activeHours;
+    mostCommonSpan.textContent = stats.mostCommon;
 }
 
 // Navigate to previous/next date
@@ -1352,18 +1376,25 @@ function onChartModeChange() {
 function displayCurrentView() {
     const selectedView = viewMode.value;
 
-    timelineContainer.classList.add('hidden');
-    distributionContainer.classList.add('hidden');
-    document.getElementById('advancedContainer').classList.add('hidden');
+    // Use mobile app view switching if available
+    if (mobileApp && mobileApp.switchView) {
+        mobileApp.switchView(selectedView);
+        return;
+    }
+
+    // Fallback to original view switching
+    timelineContainer.classList.add('mobile-hidden');
+    distributionContainer.classList.add('mobile-hidden');
+    document.getElementById('advancedContainer').classList.add('mobile-hidden');
 
     if (selectedView === 'timeline') {
-        timelineContainer.classList.remove('hidden');
+        timelineContainer.classList.remove('mobile-hidden');
         displayTimeline();
     } else if (selectedView === 'distribution') {
-        distributionContainer.classList.remove('hidden');
+        distributionContainer.classList.remove('mobile-hidden');
         displayDistribution();
     } else if (selectedView === 'advanced') {
-        document.getElementById('advancedContainer').classList.remove('hidden');
+        document.getElementById('advancedContainer').classList.remove('mobile-hidden');
         displayAdvancedAnalytics();
     }
 }
@@ -1424,23 +1455,23 @@ async function refreshData() {
 
 // Show specific section
 function showSection(section) {
-    authSection.classList.add('hidden');
-    loadingSection.classList.add('hidden');
-    contentSection.classList.add('hidden');
-    errorSection.classList.add('hidden');
+    authSection.classList.add('mobile-hidden');
+    loadingSection.classList.add('mobile-hidden');
+    contentSection.classList.add('mobile-hidden');
+    errorSection.classList.add('mobile-hidden');
 
     switch (section) {
         case 'auth':
-            authSection.classList.remove('hidden');
+            authSection.classList.remove('mobile-hidden');
             break;
         case 'loading':
-            loadingSection.classList.remove('hidden');
+            loadingSection.classList.remove('mobile-hidden');
             break;
         case 'content':
-            contentSection.classList.remove('hidden');
+            contentSection.classList.remove('mobile-hidden');
             break;
         case 'error':
-            errorSection.classList.remove('hidden');
+            errorSection.classList.remove('mobile-hidden');
             break;
     }
 }
@@ -2365,10 +2396,16 @@ function hideSignOutButton() {
 function showRandomRecapModal() {
     console.log('🎲 Opening random recap modal...');
     
-    // Show the existing modal
+    // Use mobile app modal if available
+    if (mobileApp && mobileApp.openRandomRecapModal) {
+        mobileApp.openRandomRecapModal();
+        return;
+    }
+    
+    // Fallback to original modal
     const modal = document.getElementById('randomRecapModal');
     if (modal) {
-        modal.classList.remove('hidden');
+        modal.classList.remove('mobile-hidden');
         
         // Add event listener for generate button if not already added
         const generateBtn = document.getElementById('generateRandomRecap');
@@ -2404,9 +2441,16 @@ function showRandomRecapModal() {
 }
 
 function closeRandomRecapModal() {
+    // Use mobile app modal if available
+    if (mobileApp && mobileApp.closeRandomRecapModal) {
+        mobileApp.closeRandomRecapModal();
+        return;
+    }
+    
+    // Fallback to original modal
     const modal = document.getElementById('randomRecapModal');
     if (modal) {
-        modal.classList.add('hidden');
+        modal.classList.add('mobile-hidden');
         console.log('✅ Random recap modal closed');
     }
 }
