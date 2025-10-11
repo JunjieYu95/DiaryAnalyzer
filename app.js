@@ -2061,9 +2061,9 @@ async function showLogModal() {
                     <div class="form-group">
                         <label for="eventCalendar">Calendar</label>
                         <select id="eventCalendar" name="eventCalendar">
-                            <option value="Actual Diary - Prod">Production Work</option>
-                            <option value="Actual Diary - Nonprod">Non-Production</option>
-                            <option value="Actual Diary - Admin/Rest/Routine">Admin & Rest</option>
+                            <option value="Actual Diary-Prod">Production Work</option>
+                            <option value="Actual Diary-Nonprod">Non-Production</option>
+                            <option value="Actual Diary-Admin/Rest/Routine">Admin & Rest</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -2285,7 +2285,24 @@ async function createCalendarEvent(eventData) {
     }
     
     const calendarList = await calendarListResponse.json();
-    const selectedCalendar = calendarList.items?.find(cal => cal.summary === eventData.calendar);
+    
+    // Try exact match first
+    let selectedCalendar = calendarList.items?.find(cal => cal.summary === eventData.calendar);
+    
+    // If no exact match, try case-insensitive match
+    if (!selectedCalendar) {
+        selectedCalendar = calendarList.items?.find(cal => 
+            cal.summary?.toLowerCase() === eventData.calendar.toLowerCase()
+        );
+    }
+    
+    // If still no match, try partial match for "Actual Diary" calendars
+    if (!selectedCalendar && eventData.calendar.includes('Actual Diary')) {
+        const searchTerm = eventData.calendar.toLowerCase().replace(/\s+/g, '');
+        selectedCalendar = calendarList.items?.find(cal => 
+            cal.summary?.toLowerCase().replace(/\s+/g, '') === searchTerm
+        );
+    }
     
     let targetCalendar = 'primary'; // default fallback
     
@@ -2294,6 +2311,7 @@ async function createCalendarEvent(eventData) {
         console.log(`📅 Found target calendar: ${selectedCalendar.summary} (ID: ${selectedCalendar.id})`);
     } else {
         console.log(`⚠️ Calendar "${eventData.calendar}" not found, using primary calendar`);
+        console.log(`📋 Available calendars:`, calendarList.items?.map(cal => cal.summary));
     }
     
     console.log('📅 Creating event in calendar:', targetCalendar);
