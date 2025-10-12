@@ -35,6 +35,11 @@ const timelineContainer = document.getElementById('timelineContainer');
 const distributionContainer = document.getElementById('distributionContainer');
 const distributionChart = document.getElementById('distributionChart');
 const distributionStats = document.getElementById('distributionStats');
+const aggregatedContainer = document.getElementById('aggregatedContainer');
+const aggregatedChart = document.getElementById('aggregatedChart');
+const aggregationPeriod = document.getElementById('aggregationPeriod');
+const categorySelection = document.getElementById('categorySelection');
+const showEventCount = document.getElementById('showEventCount');
 const totalEventsSpan = document.getElementById('totalEvents');
 const activeHoursSpan = document.getElementById('activeHours');
 const mostCommonSpan = document.getElementById('mostCommon');
@@ -154,6 +159,21 @@ function setupEventListeners() {
         });
     } else {
         console.error('❌ View mode element not found');
+    }
+    
+    // Add event listeners for aggregated view controls
+    if (aggregationPeriod) {
+        aggregationPeriod.addEventListener('change', onAggregationPeriodChange);
+        console.log('✅ Aggregation period listener added');
+    } else {
+        console.error('❌ Aggregation period element not found');
+    }
+    
+    if (showEventCount) {
+        showEventCount.addEventListener('change', onEventCountToggleChange);
+        console.log('✅ Event count toggle listener added');
+    } else {
+        console.error('❌ Event count toggle element not found');
     }
     
     if (prevDayBtn) {
@@ -1355,6 +1375,7 @@ function displayCurrentView() {
     timelineContainer.classList.add('hidden');
     distributionContainer.classList.add('hidden');
     document.getElementById('advancedContainer').classList.add('hidden');
+    aggregatedContainer.classList.add('hidden');
 
     if (selectedView === 'timeline') {
         timelineContainer.classList.remove('hidden');
@@ -1365,6 +1386,9 @@ function displayCurrentView() {
     } else if (selectedView === 'advanced') {
         document.getElementById('advancedContainer').classList.remove('hidden');
         displayAdvancedAnalytics();
+    } else if (selectedView === 'aggregated') {
+        aggregatedContainer.classList.remove('hidden');
+        displayAggregatedView();
     }
 }
 
@@ -2688,4 +2712,388 @@ function getTimeAgo(date) {
         const years = Math.floor(diffDays / 365);
         return years === 1 ? '1 year ago' : `${years} years ago`;
     }
+}
+
+// ===== AGGREGATED CATEGORY TRENDS FUNCTIONS =====
+
+// Display aggregated view
+function displayAggregatedView() {
+    console.log('📊 Displaying aggregated category trends...');
+    
+    try {
+        if (!aggregatedChart) {
+            console.error('❌ Aggregated chart container not found');
+            return;
+        }
+        
+        // Clear previous content
+        aggregatedChart.innerHTML = '';
+        
+        // Get the selected date range
+        const startDate = getDateRangeStart();
+        const endDate = getDateRangeEnd();
+        
+        // Filter events for the selected range
+        const rangeEvents = allEvents.filter(event => {
+            const eventDate = new Date(event.start.dateTime || event.start.date);
+            return eventDate >= startDate && eventDate <= endDate;
+        });
+        
+        console.log('📊 Range events for aggregated view:', rangeEvents.length);
+        
+        if (rangeEvents.length === 0) {
+            aggregatedChart.innerHTML = '<div class="no-events">No events found in this date range</div>';
+            return;
+        }
+        
+        // Initialize category selection if not already done
+        initializeCategorySelection(rangeEvents);
+        
+        // Create aggregated chart
+        createAggregatedChart(rangeEvents, startDate, endDate);
+        
+    } catch (error) {
+        console.error('❌ Error in displayAggregatedView:', error);
+        if (aggregatedChart) {
+            aggregatedChart.innerHTML = '<div class="no-events">Error loading aggregated view: ' + error.message + '</div>';
+        }
+    }
+}
+
+// Initialize category selection checkboxes
+function initializeCategorySelection(events) {
+    if (!categorySelection) return;
+    
+    // Get unique categories from events
+    const categories = new Set();
+    events.forEach(event => {
+        const category = getCalendarKey(event.calendarName);
+        categories.add(category);
+    });
+    
+    // Clear existing checkboxes
+    categorySelection.innerHTML = '';
+    
+    // Create checkboxes for each category
+    const categoryOrder = ['prod', 'nonprod', 'admin', 'other'];
+    const categoryLabels = {
+        'prod': 'Production Work',
+        'nonprod': 'Non-Production',
+        'admin': 'Admin & Rest',
+        'other': 'Other Activities'
+    };
+    
+    categoryOrder.forEach(category => {
+        if (categories.has(category)) {
+            const checkboxItem = document.createElement('div');
+            checkboxItem.className = 'category-checkbox-item checked';
+            checkboxItem.innerHTML = `
+                <input type="checkbox" id="category-${category}" value="${category}" checked>
+                <label for="category-${category}">${categoryLabels[category]}</label>
+            `;
+            
+            // Add click handler
+            checkboxItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                const checkbox = checkboxItem.querySelector('input[type="checkbox"]');
+                checkbox.checked = !checkbox.checked;
+                checkboxItem.classList.toggle('checked', checkbox.checked);
+                onCategorySelectionChange();
+            });
+            
+            categorySelection.appendChild(checkboxItem);
+        }
+    });
+}
+
+// Handle aggregation period change
+function onAggregationPeriodChange() {
+    console.log('📅 Aggregation period changed to:', aggregationPeriod.value);
+    displayAggregatedView();
+}
+
+// Handle event count toggle change
+function onEventCountToggleChange() {
+    console.log('📊 Event count toggle changed to:', showEventCount.checked);
+    displayAggregatedView();
+}
+
+// Handle category selection change
+function onCategorySelectionChange() {
+    console.log('📊 Category selection changed');
+    displayAggregatedView();
+}
+
+// Create aggregated chart using Chart.js
+function createAggregatedChart(events, startDate, endDate) {
+    console.log('📊 Creating aggregated chart...');
+    
+    if (!aggregatedChart) {
+        console.error('❌ Aggregated chart container not found');
+        return;
+    }
+    
+    // Get selected categories
+    const selectedCategories = getSelectedCategories();
+    if (selectedCategories.length === 0) {
+        aggregatedChart.innerHTML = '<div class="no-events">Please select at least one category to display</div>';
+        return;
+    }
+    
+    // Get aggregation period
+    const period = aggregationPeriod ? aggregationPeriod.value : 'weekly';
+    const showEventCounts = showEventCount ? showEventCount.checked : false;
+    
+    // Aggregate data
+    const aggregatedData = aggregateDataByPeriod(events, startDate, endDate, period, selectedCategories);
+    
+    if (aggregatedData.length === 0) {
+        aggregatedChart.innerHTML = '<div class="no-events">No data available for the selected period and categories</div>';
+        return;
+    }
+    
+    // Create Chart.js chart
+    const ctx = document.createElement('canvas');
+    aggregatedChart.innerHTML = '';
+    aggregatedChart.appendChild(ctx);
+    
+    // Prepare data for Chart.js
+    const labels = aggregatedData.map(item => item.period);
+    const datasets = selectedCategories.map(category => {
+        const categoryData = aggregatedData.map(item => item.categories[category] || 0);
+        const color = getCategoryColor(category);
+        
+        return {
+            label: getCategoryDisplayName(category),
+            data: categoryData,
+            borderColor: color,
+            backgroundColor: color + '20', // Add transparency
+            borderWidth: 2,
+            fill: false,
+            tension: 0.1
+        };
+    });
+    
+    // Add event count datasets if enabled
+    if (showEventCounts) {
+        selectedCategories.forEach(category => {
+            const eventCountData = aggregatedData.map(item => item.eventCounts[category] || 0);
+            const color = getCategoryColor(category);
+            
+            datasets.push({
+                label: `${getCategoryDisplayName(category)} (Events)`,
+                data: eventCountData,
+                borderColor: color,
+                backgroundColor: color + '10',
+                borderWidth: 1,
+                borderDash: [5, 5],
+                fill: false,
+                tension: 0.1,
+                yAxisID: 'y1'
+            });
+        });
+    }
+    
+    // Create chart
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: `Category Trends - ${period.charAt(0).toUpperCase() + period.slice(1)} View`,
+                    font: {
+                        size: 16,
+                        weight: 'bold'
+                    }
+                },
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 20
+                    }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.dataset.label || '';
+                            const value = context.parsed.y;
+                            
+                            if (label.includes('(Events)')) {
+                                return `${label}: ${value} events`;
+                            } else {
+                                const hours = Math.floor(value / 60);
+                                const minutes = Math.floor(value % 60);
+                                const timeStr = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+                                return `${label}: ${timeStr}`;
+                            }
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    display: true,
+                    title: {
+                        display: true,
+                        text: 'Time Period'
+                    }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Time (minutes)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            const hours = Math.floor(value / 60);
+                            const minutes = Math.floor(value % 60);
+                            return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+                        }
+                    }
+                },
+                y1: showEventCounts ? {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Event Count'
+                    },
+                    grid: {
+                        drawOnChartArea: false,
+                    },
+                } : undefined
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            }
+        }
+    });
+    
+    console.log('✅ Aggregated chart created successfully');
+}
+
+// Get selected categories from checkboxes
+function getSelectedCategories() {
+    if (!categorySelection) return [];
+    
+    const checkboxes = categorySelection.querySelectorAll('input[type="checkbox"]:checked');
+    return Array.from(checkboxes).map(checkbox => checkbox.value);
+}
+
+// Aggregate data by period (weekly or monthly)
+function aggregateDataByPeriod(events, startDate, endDate, period, categories) {
+    const aggregatedData = [];
+    const currentDate = new Date(startDate);
+    
+    while (currentDate <= endDate) {
+        let periodEnd;
+        let periodLabel;
+        
+        if (period === 'weekly') {
+            // Get start of week (Monday)
+            const dayOfWeek = currentDate.getDay();
+            const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+            const weekStart = new Date(currentDate);
+            weekStart.setDate(currentDate.getDate() + mondayOffset);
+            
+            // Get end of week (Sunday)
+            periodEnd = new Date(weekStart);
+            periodEnd.setDate(weekStart.getDate() + 6);
+            
+            // Format label
+            const weekStartStr = weekStart.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            const weekEndStr = periodEnd.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            periodLabel = `${weekStartStr} - ${weekEndStr}`;
+            
+            // Move to next week
+            currentDate.setDate(weekStart.getDate() + 7);
+        } else {
+            // Monthly aggregation
+            periodEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+            if (periodEnd > endDate) periodEnd = endDate;
+            
+            // Format label
+            periodLabel = currentDate.toLocaleDateString([], { month: 'short', year: 'numeric' });
+            
+            // Move to next month
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            currentDate.setDate(1);
+        }
+        
+        // Filter events for this period
+        const periodEvents = events.filter(event => {
+            const eventDate = new Date(event.start.dateTime || event.start.date);
+            return eventDate >= currentDate && eventDate <= periodEnd;
+        });
+        
+        // Calculate totals for each category
+        const categoryTotals = {};
+        const eventCounts = {};
+        
+        categories.forEach(category => {
+            categoryTotals[category] = 0;
+            eventCounts[category] = 0;
+        });
+        
+        periodEvents.forEach(event => {
+            if (event.start.dateTime && event.end.dateTime) {
+                const category = getCalendarKey(event.calendarName);
+                if (categories.includes(category)) {
+                    const start = new Date(event.start.dateTime);
+                    const end = new Date(event.end.dateTime);
+                    const duration = (end - start) / (1000 * 60); // minutes
+                    
+                    categoryTotals[category] += duration;
+                    eventCounts[category] += 1;
+                }
+            }
+        });
+        
+        aggregatedData.push({
+            period: periodLabel,
+            categories: categoryTotals,
+            eventCounts: eventCounts
+        });
+    }
+    
+    return aggregatedData;
+}
+
+// Get category color for charts
+function getCategoryColor(category) {
+    const colors = {
+        'prod': '#4CAF50',
+        'nonprod': '#FF9800',
+        'admin': '#9C27B0',
+        'other': '#607D8B'
+    };
+    return colors[category] || '#607D8B';
+}
+
+// Get category display name
+function getCategoryDisplayName(category) {
+    const names = {
+        'prod': 'Production Work',
+        'nonprod': 'Non-Production',
+        'admin': 'Admin & Rest',
+        'other': 'Other Activities'
+    };
+    return names[category] || category;
 }
