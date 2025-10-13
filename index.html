@@ -54,6 +54,7 @@
                         <option value="timeline">Timeline</option>
                         <option value="advanced">Advanced Analytics</option>
                         <option value="aggregated">Category Trends</option>
+                        <option value="calendar">Highlights & Milestones</option>
                     </select>
                     <button id="logButton" class="log-btn">📝 Quick Log</button>
                     <button id="randomRecapBtn" class="random-recap-btn">🎲 Random Recap</button>
@@ -165,9 +166,72 @@
                         <!-- Chart will be dynamically inserted here -->
                     </div>
                 </div>
+
+                <!-- Calendar View -->
+                <div id="calendarContainer" class="calendar-container hidden">
+                    <div class="calendar-header">
+                        <h3>Highlights & Milestones Calendar</h3>
+                        <div class="calendar-controls">
+                            <button id="prevYear" class="calendar-nav-btn">← Previous Year</button>
+                            <span id="currentYear" class="current-year">2024</span>
+                            <button id="nextYear" class="calendar-nav-btn">Next Year →</button>
+                        </div>
+                    </div>
+                    <div class="calendar-wrapper">
+                        <div id="calendarGrid" class="calendar-grid">
+                            <!-- Calendar will be dynamically generated here -->
+                        </div>
+                    </div>
+                    <div class="highlights-log">
+                        <h4>Add Highlight or Milestone</h4>
+                        <div class="log-form">
+                            <div class="form-group">
+                                <label for="highlightDate">Date:</label>
+                                <input type="date" id="highlightDate" class="date-input">
+                            </div>
+                            <div class="form-group">
+                                <label for="highlightTitle">Title:</label>
+                                <input type="text" id="highlightTitle" class="title-input" placeholder="Enter highlight or milestone title">
+                            </div>
+                            <div class="form-group">
+                                <label for="highlightDescription">Description:</label>
+                                <textarea id="highlightDescription" class="description-input" placeholder="Enter description (optional)"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="highlightType">Type:</label>
+                                <select id="highlightType" class="type-select">
+                                    <option value="highlight">Highlight</option>
+                                    <option value="milestone">Milestone</option>
+                                    <option value="achievement">Achievement</option>
+                                    <option value="memory">Memory</option>
+                                </select>
+                            </div>
+                            <button id="saveHighlight" class="save-highlight-btn">💾 Save Highlight</button>
+                        </div>
+                    </div>
+                </div>
             </section>
         </main>
         
+        <!-- Day Details Popup Modal -->
+        <div id="dayDetailsModal" class="day-details-modal hidden">
+            <div class="day-details-modal-content">
+                <div class="day-details-header">
+                    <h2 id="dayDetailsTitle">Day Details</h2>
+                    <button class="day-details-close" onclick="closeDayDetailsModal()">&times;</button>
+                </div>
+                <div class="day-details-content">
+                    <div id="dayDetailsDate" class="day-details-date"></div>
+                    <div id="dayDetailsEvents" class="day-details-events">
+                        <!-- Calendar events will be shown here -->
+                    </div>
+                    <div id="dayDetailsHighlights" class="day-details-highlights">
+                        <!-- Highlights and milestones will be shown here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Random Recap Popup Modal -->
         <div id="randomRecapModal" class="random-recap-modal hidden">
             <div class="random-recap-modal-content">
