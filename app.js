@@ -44,6 +44,14 @@ const aggregatedChart = document.getElementById('aggregatedChart');
 const aggregationPeriod = document.getElementById('aggregationPeriod');
 const categorySelection = document.getElementById('categorySelection');
 const showEventCount = document.getElementById('showEventCount');
+// Tab elements
+const analyticsTab = document.getElementById('analyticsTab');
+const highlightsTab = document.getElementById('highlightsTab');
+const analyticsTabContent = document.getElementById('analyticsTabContent');
+const highlightsTabContent = document.getElementById('highlightsTabContent');
+const highlightsLogButton = document.getElementById('highlightsLogButton');
+
+// Calendar elements
 const calendarContainer = document.getElementById('calendarContainer');
 const calendarGrid = document.getElementById('calendarGrid');
 const currentYearSpan = document.getElementById('currentYear');
@@ -423,6 +431,22 @@ window.testEventListeners = function() {
         viewMode.value = originalValue;
     } else {
         console.error('❌ View mode element not found');
+    }
+    
+    // Tab event listeners
+    if (analyticsTab) {
+        analyticsTab.addEventListener('click', () => switchTab('analytics'));
+        console.log('✅ Analytics tab listener added');
+    }
+    
+    if (highlightsTab) {
+        highlightsTab.addEventListener('click', () => switchTab('highlights'));
+        console.log('✅ Highlights tab listener added');
+    }
+    
+    if (highlightsLogButton) {
+        highlightsLogButton.addEventListener('click', openHighlightsLogModal);
+        console.log('✅ Highlights log button listener added');
     }
     
     console.log('🧪 === END EVENT LISTENER TEST ===');
@@ -1410,6 +1434,38 @@ function onViewModeChange() {
     updateStats(); // Also update stats when view mode changes
 }
 
+// Tab switching functions
+function switchTab(tabName) {
+    console.log('🔄 Switching to tab:', tabName);
+    
+    // Remove active class from all tabs and content
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    
+    if (tabName === 'analytics') {
+        analyticsTab.classList.add('active');
+        analyticsTabContent.classList.add('active');
+        displayCurrentView(); // Show the current analytics view
+        updateStats();
+    } else if (tabName === 'highlights') {
+        highlightsTab.classList.add('active');
+        highlightsTabContent.classList.add('active');
+        displayCalendar(); // Show the calendar view
+    }
+}
+
+// Open highlights log modal (placeholder for now)
+function openHighlightsLogModal() {
+    console.log('📝 Opening highlights log modal');
+    // For now, just focus on the existing highlight form
+    if (highlightDateInput) {
+        highlightDateInput.focus();
+        // Set today's date as default
+        const today = new Date().toISOString().split('T')[0];
+        highlightDateInput.value = today;
+    }
+}
+
 // Handle chart mode change
 function onChartModeChange() {
     displayAdvancedAnalytics();
@@ -1423,7 +1479,6 @@ function displayCurrentView() {
     distributionContainer.classList.add('hidden');
     document.getElementById('advancedContainer').classList.add('hidden');
     aggregatedContainer.classList.add('hidden');
-    calendarContainer.classList.add('hidden');
 
     if (selectedView === 'timeline') {
         timelineContainer.classList.remove('hidden');
@@ -1436,9 +1491,6 @@ function displayCurrentView() {
         displayAdvancedAnalytics();
     } else if (selectedView === 'aggregated') {
         aggregatedContainer.classList.remove('hidden');
-    } else if (selectedView === 'calendar') {
-        calendarContainer.classList.remove('hidden');
-        displayCalendar();
     }
 }
 
@@ -3360,7 +3412,148 @@ function closeDayDetailsModal() {
     }
 }
 
-function saveHighlight() {
+// Google Calendar integration for highlights and milestones
+let highlightsCalendarId = null;
+
+// Create or find the highlights calendar
+async function ensureHighlightsCalendar() {
+    const accessToken = getAccessToken();
+    if (!accessToken) {
+        throw new Error('No access token available');
+    }
+
+    try {
+        // First, try to find existing highlights calendar
+        const calendarListResponse = await fetch(
+            'https://www.googleapis.com/calendar/v3/users/me/calendarList',
+            {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        if (calendarListResponse.ok) {
+            const calendarList = await calendarListResponse.json();
+            const existingCalendar = calendarList.items?.find(cal => 
+                cal.summary === 'Highlights & Milestones' || 
+                cal.summary === 'Diary Highlights' ||
+                cal.summary?.toLowerCase().includes('highlights')
+            );
+            
+            if (existingCalendar) {
+                highlightsCalendarId = existingCalendar.id;
+                console.log('✅ Found existing highlights calendar:', existingCalendar.summary);
+                return highlightsCalendarId;
+            }
+        }
+
+        // Create new highlights calendar
+        console.log('📅 Creating new highlights calendar...');
+        const createCalendarResponse = await fetch(
+            'https://www.googleapis.com/calendar/v3/calendars',
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    summary: 'Highlights & Milestones',
+                    description: 'Personal highlights, milestones, and achievements tracked through Diary Analyzer',
+                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                })
+            }
+        );
+
+        if (createCalendarResponse.ok) {
+            const newCalendar = await createCalendarResponse.json();
+            highlightsCalendarId = newCalendar.id;
+            console.log('✅ Created new highlights calendar:', newCalendar.summary);
+            return highlightsCalendarId;
+        } else {
+            throw new Error(`Failed to create calendar: ${createCalendarResponse.status}`);
+        }
+
+    } catch (error) {
+        console.error('❌ Error ensuring highlights calendar:', error);
+        throw error;
+    }
+}
+
+// Save highlight to Google Calendar
+async function saveHighlightToGoogleCalendar(highlight) {
+    const accessToken = getAccessToken();
+    if (!accessToken) {
+        throw new Error('No access token available');
+    }
+
+    try {
+        // Ensure we have a highlights calendar
+        if (!highlightsCalendarId) {
+            await ensureHighlightsCalendar();
+        }
+
+        // Create event in Google Calendar
+        const eventDate = new Date(highlight.date);
+        const startDateTime = new Date(eventDate);
+        startDateTime.setHours(9, 0, 0, 0); // 9 AM
+        const endDateTime = new Date(startDateTime);
+        endDateTime.setHours(10, 0, 0, 0); // 10 AM
+
+        const event = {
+            summary: `⭐ ${highlight.title}`,
+            description: `${highlight.description}\n\nType: ${highlight.type}\nCreated: ${highlight.createdAt}`,
+            start: {
+                dateTime: startDateTime.toISOString(),
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            end: {
+                dateTime: endDateTime.toISOString(),
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            colorId: getColorIdForType(highlight.type)
+        };
+
+        const createEventResponse = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(highlightsCalendarId)}/events`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(event)
+            }
+        );
+
+        if (createEventResponse.ok) {
+            const createdEvent = await createEventResponse.json();
+            console.log('✅ Event created in Google Calendar:', createdEvent.summary);
+            return createdEvent;
+        } else {
+            throw new Error(`Failed to create event: ${createEventResponse.status}`);
+        }
+
+    } catch (error) {
+        console.error('❌ Error saving highlight to Google Calendar:', error);
+        throw error;
+    }
+}
+
+// Get color ID for different highlight types
+function getColorIdForType(type) {
+    const colorMap = {
+        'highlight': '6',    // Orange
+        'milestone': '11',   // Red
+        'achievement': '10', // Green
+        'memory': '5'        // Yellow
+    };
+    return colorMap[type] || '6';
+}
+
+async function saveHighlight() {
     const date = highlightDateInput.value;
     const title = highlightTitleInput.value.trim();
     const description = highlightDescriptionInput.value.trim();
@@ -3380,21 +3573,41 @@ function saveHighlight() {
         createdAt: new Date().toISOString()
     };
     
-    highlightsData.push(highlight);
-    localStorage.setItem('highlightsData', JSON.stringify(highlightsData));
-    
-    // Clear form
-    highlightTitleInput.value = '';
-    highlightDescriptionInput.value = '';
-    highlightTypeSelect.value = 'highlight';
-    
-    // Refresh calendar if it's currently displayed
-    if (viewMode && viewMode.value === 'calendar') {
-        generateCalendarGrid();
+    try {
+        // Save to Google Calendar
+        await saveHighlightToGoogleCalendar(highlight);
+        
+        // Also save locally for backup
+        highlightsData.push(highlight);
+        localStorage.setItem('highlightsData', JSON.stringify(highlightsData));
+        
+        // Clear form
+        highlightTitleInput.value = '';
+        highlightDescriptionInput.value = '';
+        highlightTypeSelect.value = 'highlight';
+        
+        // Refresh calendar if it's currently displayed
+        if (highlightsTab && highlightsTab.classList.contains('active')) {
+            generateCalendarGrid();
+        }
+        
+        console.log('💾 Highlight saved to Google Calendar:', highlight);
+        alert('Highlight saved successfully to Google Calendar!');
+        
+    } catch (error) {
+        console.error('❌ Error saving highlight to Google Calendar:', error);
+        
+        // Fallback to local storage only
+        highlightsData.push(highlight);
+        localStorage.setItem('highlightsData', JSON.stringify(highlightsData));
+        
+        // Clear form
+        highlightTitleInput.value = '';
+        highlightDescriptionInput.value = '';
+        highlightTypeSelect.value = 'highlight';
+        
+        alert('Highlight saved locally (Google Calendar unavailable).');
     }
-    
-    console.log('💾 Highlight saved:', highlight);
-    alert('Highlight saved successfully!');
 }
 
 // Make functions globally available
