@@ -44,12 +44,12 @@ const aggregatedChart = document.getElementById('aggregatedChart');
 const aggregationPeriod = document.getElementById('aggregationPeriod');
 const categorySelection = document.getElementById('categorySelection');
 const showEventCount = document.getElementById('showEventCount');
-// Tab elements
-const analyticsTab = document.getElementById('analyticsTab');
-const highlightsTab = document.getElementById('highlightsTab');
-const analyticsTabContent = document.getElementById('analyticsTabContent');
-const highlightsTabContent = document.getElementById('highlightsTabContent');
-const highlightsLogButton = document.getElementById('highlightsLogButton');
+// Tab elements - will be initialized in DOMContentLoaded
+let analyticsTab;
+let highlightsTab;
+let analyticsTabContent;
+let highlightsTabContent;
+let highlightsLogButton;
 
 // Calendar elements
 const calendarContainer = document.getElementById('calendarContainer');
@@ -79,6 +79,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('🔑 Client ID configured:', CONFIG.GOOGLE_CLIENT_ID);
     console.log('🌐 Current origin:', window.location.origin);
     console.log('📱 User agent:', navigator.userAgent);
+    
+    // Initialize tab elements
+    analyticsTab = document.getElementById('analyticsTab');
+    highlightsTab = document.getElementById('highlightsTab');
+    analyticsTabContent = document.getElementById('analyticsTabContent');
+    highlightsTabContent = document.getElementById('highlightsTabContent');
+    highlightsLogButton = document.getElementById('highlightsLogButton');
     
     // Check if authentication completed before app loaded
     if (window.authCompleted || window.globalAccessToken) {
@@ -272,6 +279,34 @@ function setupEventListeners() {
         console.log('⚠️ Sign out button not found');
     }
     
+    // Tab event listeners
+    console.log('🔍 Tab elements check:');
+    console.log('  - analyticsTab:', analyticsTab);
+    console.log('  - highlightsTab:', highlightsTab);
+    console.log('  - analyticsTabContent:', analyticsTabContent);
+    console.log('  - highlightsTabContent:', highlightsTabContent);
+    
+    if (analyticsTab) {
+        analyticsTab.addEventListener('click', () => switchTab('analytics'));
+        console.log('✅ Analytics tab listener added');
+    } else {
+        console.error('❌ Analytics tab not found');
+    }
+    
+    if (highlightsTab) {
+        highlightsTab.addEventListener('click', () => switchTab('highlights'));
+        console.log('✅ Highlights tab listener added');
+    } else {
+        console.error('❌ Highlights tab not found');
+    }
+    
+    if (highlightsLogButton) {
+        highlightsLogButton.addEventListener('click', openHighlightsLogModal);
+        console.log('✅ Highlights log button listener added');
+    } else {
+        console.log('⚠️ Highlights log button not found');
+    }
+    
     console.log('🔧 Event listeners setup complete');
 }
 
@@ -431,22 +466,6 @@ window.testEventListeners = function() {
         viewMode.value = originalValue;
     } else {
         console.error('❌ View mode element not found');
-    }
-    
-    // Tab event listeners
-    if (analyticsTab) {
-        analyticsTab.addEventListener('click', () => switchTab('analytics'));
-        console.log('✅ Analytics tab listener added');
-    }
-    
-    if (highlightsTab) {
-        highlightsTab.addEventListener('click', () => switchTab('highlights'));
-        console.log('✅ Highlights tab listener added');
-    }
-    
-    if (highlightsLogButton) {
-        highlightsLogButton.addEventListener('click', openHighlightsLogModal);
-        console.log('✅ Highlights log button listener added');
     }
     
     console.log('🧪 === END EVENT LISTENER TEST ===');
@@ -1437,6 +1456,10 @@ function onViewModeChange() {
 // Tab switching functions
 function switchTab(tabName) {
     console.log('🔄 Switching to tab:', tabName);
+    console.log('🔄 Analytics tab element:', analyticsTab);
+    console.log('🔄 Highlights tab element:', highlightsTab);
+    console.log('🔄 Analytics tab content element:', analyticsTabContent);
+    console.log('🔄 Highlights tab content element:', highlightsTabContent);
     
     // Remove active class from all tabs and content
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -1450,6 +1473,7 @@ function switchTab(tabName) {
     } else if (tabName === 'highlights') {
         highlightsTab.classList.add('active');
         highlightsTabContent.classList.add('active');
+        console.log('🔄 Highlights tab content classes after adding active:', highlightsTabContent.classList.toString());
         displayCalendar(); // Show the calendar view
     }
 }
@@ -3208,6 +3232,8 @@ function getCategoryDisplayName(category) {
 // Calendar View Functions
 function displayCalendar() {
     console.log('📅 Displaying calendar view for year:', currentYear);
+    console.log('📅 Calendar container element:', calendarContainer);
+    console.log('📅 Calendar grid element:', calendarGrid);
     updateCurrentYearDisplay();
     generateCalendarGrid();
 }
@@ -3225,8 +3251,14 @@ function navigateYear(direction) {
 }
 
 function generateCalendarGrid() {
-    if (!calendarGrid) return;
+    console.log('📅 generateCalendarGrid called');
+    console.log('📅 calendarGrid element:', calendarGrid);
+    if (!calendarGrid) {
+        console.error('❌ calendarGrid element not found!');
+        return;
+    }
     
+    console.log('📅 Clearing existing calendar and generating new grid...');
     // Clear existing calendar
     calendarGrid.innerHTML = '';
     
@@ -3268,6 +3300,8 @@ function generateCalendarGrid() {
             calendarGrid.appendChild(dayElement);
         }
     }
+    
+    console.log('✅ Calendar grid generated successfully');
 }
 
 function createCalendarDay(year, month, day) {
