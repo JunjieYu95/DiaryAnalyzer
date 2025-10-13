@@ -4,6 +4,10 @@ let currentDate = new Date();
 let allEvents = [];
 // gapi not needed - we use direct fetch calls to Google Calendar API
 
+// Calendar and highlights data
+let currentYear = new Date().getFullYear();
+let highlightsData = JSON.parse(localStorage.getItem('highlightsData') || '[]');
+
 // Helper to get access token (works with both local and window scope)
 function getAccessToken() {
     return window.accessToken || window.globalAccessToken || null;
@@ -40,6 +44,21 @@ const aggregatedChart = document.getElementById('aggregatedChart');
 const aggregationPeriod = document.getElementById('aggregationPeriod');
 const categorySelection = document.getElementById('categorySelection');
 const showEventCount = document.getElementById('showEventCount');
+const calendarContainer = document.getElementById('calendarContainer');
+const calendarGrid = document.getElementById('calendarGrid');
+const currentYearSpan = document.getElementById('currentYear');
+const prevYearBtn = document.getElementById('prevYear');
+const nextYearBtn = document.getElementById('nextYear');
+const highlightDateInput = document.getElementById('highlightDate');
+const highlightTitleInput = document.getElementById('highlightTitle');
+const highlightDescriptionInput = document.getElementById('highlightDescription');
+const highlightTypeSelect = document.getElementById('highlightType');
+const saveHighlightBtn = document.getElementById('saveHighlight');
+const dayDetailsModal = document.getElementById('dayDetailsModal');
+const dayDetailsTitle = document.getElementById('dayDetailsTitle');
+const dayDetailsDate = document.getElementById('dayDetailsDate');
+const dayDetailsEvents = document.getElementById('dayDetailsEvents');
+const dayDetailsHighlights = document.getElementById('dayDetailsHighlights');
 const totalEventsSpan = document.getElementById('totalEvents');
 const activeHoursSpan = document.getElementById('activeHours');
 const mostCommonSpan = document.getElementById('mostCommon');
@@ -208,6 +227,34 @@ function setupEventListeners() {
         console.log('⚠️ Random recap button not found');
     }
     
+    // Calendar view event listeners
+    if (prevYearBtn) {
+        prevYearBtn.addEventListener('click', () => navigateYear(-1));
+        console.log('✅ Previous year button listener added');
+    } else {
+        console.error('❌ Previous year button not found');
+    }
+    
+    if (nextYearBtn) {
+        nextYearBtn.addEventListener('click', () => navigateYear(1));
+        console.log('✅ Next year button listener added');
+    } else {
+        console.error('❌ Next year button not found');
+    }
+    
+    if (saveHighlightBtn) {
+        saveHighlightBtn.addEventListener('click', saveHighlight);
+        console.log('✅ Save highlight button listener added');
+    } else {
+        console.error('❌ Save highlight button not found');
+    }
+    
+    // Set today's date as default for highlight date input
+    if (highlightDateInput) {
+        highlightDateInput.value = new Date().toISOString().split('T')[0];
+        console.log('✅ Highlight date input initialized');
+    }
+
     // Sign out button
     const signOutBtn = document.getElementById('signOutBtn');
     if (signOutBtn) {
@@ -1376,6 +1423,7 @@ function displayCurrentView() {
     distributionContainer.classList.add('hidden');
     document.getElementById('advancedContainer').classList.add('hidden');
     aggregatedContainer.classList.add('hidden');
+    calendarContainer.classList.add('hidden');
 
     if (selectedView === 'timeline') {
         timelineContainer.classList.remove('hidden');
@@ -1388,7 +1436,9 @@ function displayCurrentView() {
         displayAdvancedAnalytics();
     } else if (selectedView === 'aggregated') {
         aggregatedContainer.classList.remove('hidden');
-        displayAggregatedView();
+    } else if (selectedView === 'calendar') {
+        calendarContainer.classList.remove('hidden');
+        displayCalendar();
     }
 }
 
@@ -3097,3 +3147,255 @@ function getCategoryDisplayName(category) {
     };
     return names[category] || category;
 }
+
+// Calendar View Functions
+function displayCalendar() {
+    console.log('📅 Displaying calendar view for year:', currentYear);
+    updateCurrentYearDisplay();
+    generateCalendarGrid();
+}
+
+function updateCurrentYearDisplay() {
+    if (currentYearSpan) {
+        currentYearSpan.textContent = currentYear;
+    }
+}
+
+function navigateYear(direction) {
+    currentYear += direction;
+    updateCurrentYearDisplay();
+    generateCalendarGrid();
+}
+
+function generateCalendarGrid() {
+    if (!calendarGrid) return;
+    
+    // Clear existing calendar
+    calendarGrid.innerHTML = '';
+    
+    // Add day headers
+    const dayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    dayHeaders.forEach(day => {
+        const header = document.createElement('div');
+        header.className = 'calendar-day-header';
+        header.textContent = day;
+        header.style.cssText = `
+            background: #f8fafc;
+            padding: 0.5rem;
+            text-align: center;
+            font-weight: 600;
+            color: #4a5568;
+            border-bottom: 2px solid #e2e8f0;
+        `;
+        calendarGrid.appendChild(header);
+    });
+    
+    // Generate calendar for the entire year
+    for (let month = 0; month < 12; month++) {
+        const firstDay = new Date(currentYear, month, 1);
+        const lastDay = new Date(currentYear, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const startDayOfWeek = firstDay.getDay();
+        
+        // Add empty cells for days before the first day of the month
+        for (let i = 0; i < startDayOfWeek; i++) {
+            const emptyDay = document.createElement('div');
+            emptyDay.className = 'calendar-day other-month';
+            emptyDay.innerHTML = '<div class="day-number"></div>';
+            calendarGrid.appendChild(emptyDay);
+        }
+        
+        // Add days of the month
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dayElement = createCalendarDay(currentYear, month, day);
+            calendarGrid.appendChild(dayElement);
+        }
+    }
+}
+
+function createCalendarDay(year, month, day) {
+    const dayElement = document.createElement('div');
+    const date = new Date(year, month, day);
+    const today = new Date();
+    const isToday = date.toDateString() === today.toDateString();
+    const isOtherMonth = month !== new Date().getMonth() || year !== new Date().getFullYear();
+    
+    dayElement.className = 'calendar-day';
+    if (isToday) dayElement.classList.add('today');
+    if (isOtherMonth) dayElement.classList.add('other-month');
+    
+    // Check for events and highlights
+    const dayEvents = getEventsForDate(date);
+    const dayHighlights = getHighlightsForDate(date);
+    
+    if (dayEvents.length > 0) dayElement.classList.add('has-events');
+    if (dayHighlights.length > 0) dayElement.classList.add('has-highlights');
+    if (dayEvents.length > 0 && dayHighlights.length > 0) dayElement.classList.add('has-both');
+    
+    // Create day content
+    const dayNumber = document.createElement('div');
+    dayNumber.className = 'day-number';
+    dayNumber.textContent = day;
+    
+    const indicators = document.createElement('div');
+    indicators.className = 'day-indicators';
+    
+    // Add event indicators
+    dayEvents.forEach(() => {
+        const indicator = document.createElement('div');
+        indicator.className = 'day-indicator';
+        indicators.appendChild(indicator);
+    });
+    
+    // Add highlight indicators
+    dayHighlights.forEach(highlight => {
+        const indicator = document.createElement('div');
+        indicator.className = `day-indicator ${highlight.type}`;
+        indicators.appendChild(indicator);
+    });
+    
+    dayElement.appendChild(dayNumber);
+    dayElement.appendChild(indicators);
+    
+    // Add click event
+    dayElement.addEventListener('click', () => showDayDetails(date, dayEvents, dayHighlights));
+    
+    return dayElement;
+}
+
+function getEventsForDate(date) {
+    if (!allEvents || allEvents.length === 0) return [];
+    
+    const dateStr = date.toISOString().split('T')[0];
+    return allEvents.filter(event => {
+        if (event.start.date) {
+            return event.start.date === dateStr;
+        } else if (event.start.dateTime) {
+            return event.start.dateTime.split('T')[0] === dateStr;
+        }
+        return false;
+    });
+}
+
+function getHighlightsForDate(date) {
+    const dateStr = date.toISOString().split('T')[0];
+    return highlightsData.filter(highlight => highlight.date === dateStr);
+}
+
+function showDayDetails(date, events, highlights) {
+    console.log('📅 Showing details for:', date.toDateString());
+    
+    if (dayDetailsTitle) {
+        dayDetailsTitle.textContent = 'Day Details';
+    }
+    
+    if (dayDetailsDate) {
+        dayDetailsDate.textContent = date.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    }
+    
+    // Display events
+    if (dayDetailsEvents) {
+        dayDetailsEvents.innerHTML = '<h3>Calendar Events</h3>';
+        
+        if (events.length === 0) {
+            dayDetailsEvents.innerHTML += '<div class="no-events">No events scheduled for this day</div>';
+        } else {
+            events.forEach(event => {
+                const eventElement = document.createElement('div');
+                eventElement.className = 'day-details-event';
+                
+                const time = event.start.dateTime ? 
+                    new Date(event.start.dateTime).toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    }) : 'All day';
+                
+                eventElement.innerHTML = `
+                    <div class="day-details-event-time">${time}</div>
+                    <div class="day-details-event-title">${event.summary || 'No title'}</div>
+                    <div class="day-details-event-description">${event.description || ''}</div>
+                `;
+                
+                dayDetailsEvents.appendChild(eventElement);
+            });
+        }
+    }
+    
+    // Display highlights
+    if (dayDetailsHighlights) {
+        dayDetailsHighlights.innerHTML = '<h3>Highlights & Milestones</h3>';
+        
+        if (highlights.length === 0) {
+            dayDetailsHighlights.innerHTML += '<div class="no-highlights">No highlights or milestones for this day</div>';
+        } else {
+            highlights.forEach(highlight => {
+                const highlightElement = document.createElement('div');
+                highlightElement.className = 'day-details-highlight';
+                
+                highlightElement.innerHTML = `
+                    <div class="day-details-highlight-type">${highlight.type.charAt(0).toUpperCase() + highlight.type.slice(1)}</div>
+                    <div class="day-details-highlight-title">${highlight.title}</div>
+                    <div class="day-details-highlight-description">${highlight.description || ''}</div>
+                `;
+                
+                dayDetailsHighlights.appendChild(highlightElement);
+            });
+        }
+    }
+    
+    // Show modal
+    if (dayDetailsModal) {
+        dayDetailsModal.classList.remove('hidden');
+    }
+}
+
+function closeDayDetailsModal() {
+    if (dayDetailsModal) {
+        dayDetailsModal.classList.add('hidden');
+    }
+}
+
+function saveHighlight() {
+    const date = highlightDateInput.value;
+    const title = highlightTitleInput.value.trim();
+    const description = highlightDescriptionInput.value.trim();
+    const type = highlightTypeSelect.value;
+    
+    if (!date || !title) {
+        alert('Please fill in the date and title fields.');
+        return;
+    }
+    
+    const highlight = {
+        id: Date.now().toString(),
+        date: date,
+        title: title,
+        description: description,
+        type: type,
+        createdAt: new Date().toISOString()
+    };
+    
+    highlightsData.push(highlight);
+    localStorage.setItem('highlightsData', JSON.stringify(highlightsData));
+    
+    // Clear form
+    highlightTitleInput.value = '';
+    highlightDescriptionInput.value = '';
+    highlightTypeSelect.value = 'highlight';
+    
+    // Refresh calendar if it's currently displayed
+    if (viewMode && viewMode.value === 'calendar') {
+        generateCalendarGrid();
+    }
+    
+    console.log('💾 Highlight saved:', highlight);
+    alert('Highlight saved successfully!');
+}
+
+// Make functions globally available
+window.closeDayDetailsModal = closeDayDetailsModal;
