@@ -3495,23 +3495,18 @@ async function saveHighlightToGoogleCalendar(highlight) {
             await ensureHighlightsCalendar();
         }
 
-        // Create event in Google Calendar
+        // Create event in Google Calendar as a whole day event
         const eventDate = new Date(highlight.date);
-        const startDateTime = new Date(eventDate);
-        startDateTime.setHours(9, 0, 0, 0); // 9 AM
-        const endDateTime = new Date(startDateTime);
-        endDateTime.setHours(10, 0, 0, 0); // 10 AM
+        const dateString = eventDate.toISOString().split('T')[0]; // YYYY-MM-DD format
 
         const event = {
             summary: `⭐ ${highlight.title}`,
             description: `${highlight.description}\n\nType: ${highlight.type}\nCreated: ${highlight.createdAt}`,
             start: {
-                dateTime: startDateTime.toISOString(),
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                date: dateString
             },
             end: {
-                dateTime: endDateTime.toISOString(),
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                date: dateString
             },
             colorId: getColorIdForType(highlight.type)
         };
