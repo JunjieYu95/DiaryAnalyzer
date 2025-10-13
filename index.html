@@ -54,7 +54,6 @@
                         <option value="timeline">Timeline</option>
                         <option value="advanced">Advanced Analytics</option>
                         <option value="aggregated">Category Trends</option>
-                        <option value="calendar">Highlights & Milestones</option>
                     </select>
                     <button id="logButton" class="log-btn">📝 Quick Log</button>
                     <button id="randomRecapBtn" class="random-recap-btn">🎲 Random Recap</button>
@@ -96,7 +95,15 @@
 
             <!-- Content Section -->
             <section id="contentSection" class="content-section hidden">
-                <div class="stats-container">
+                <!-- Tab Navigation -->
+                <div class="tab-navigation">
+                    <button id="analyticsTab" class="tab-btn active">📊 Analytics</button>
+                    <button id="highlightsTab" class="tab-btn">⭐ Highlights & Milestones</button>
+                </div>
+                
+                <!-- Analytics Tab Content -->
+                <div id="analyticsTabContent" class="tab-content active">
+                    <div class="stats-container">
                     <div class="stat-card">
                         <h3>Total Events</h3>
                         <p id="totalEvents" class="stat-value">0</p>
@@ -166,9 +173,18 @@
                         <!-- Chart will be dynamically inserted here -->
                     </div>
                 </div>
+                </div> <!-- End Analytics Tab Content -->
 
-                <!-- Calendar View -->
-                <div id="calendarContainer" class="calendar-container hidden">
+                <!-- Highlights Tab Content -->
+                <div id="highlightsTabContent" class="tab-content">
+                    <div class="highlights-header">
+                        <h2>⭐ Highlights & Milestones</h2>
+                        <p>Track your important moments and achievements</p>
+                        <button id="highlightsLogButton" class="highlights-log-btn">📝 Log Highlight</button>
+                    </div>
+
+                    <!-- Calendar View -->
+                    <div id="calendarContainer" class="calendar-container">
                     <div class="calendar-header">
                         <h3>Highlights & Milestones Calendar</h3>
                         <div class="calendar-controls">
@@ -210,6 +226,7 @@
                         </div>
                     </div>
                 </div>
+                </div> <!-- End Highlights Tab Content -->
             </section>
         </main>
         
@@ -305,7 +322,7 @@
             // Client ID comes from config.js - never hardcode credentials
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CONFIG.GOOGLE_CLIENT_ID,
-                scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events',
+                scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar',
                 callback: (response) => {
                     console.log('🔐 OAuth Token Response:', response);
                     
