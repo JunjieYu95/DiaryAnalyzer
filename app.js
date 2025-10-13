@@ -3105,29 +3105,30 @@ function aggregateDataByPeriod(events, startDate, endDate, period, categories) {
     const currentDate = new Date(startDate);
     
     while (currentDate <= endDate) {
-        let periodEnd;
+        let periodStart, periodEnd;
         let periodLabel;
         
         if (period === 'weekly') {
             // Get start of week (Monday)
             const dayOfWeek = currentDate.getDay();
             const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-            const weekStart = new Date(currentDate);
-            weekStart.setDate(currentDate.getDate() + mondayOffset);
+            periodStart = new Date(currentDate);
+            periodStart.setDate(currentDate.getDate() + mondayOffset);
             
             // Get end of week (Sunday)
-            periodEnd = new Date(weekStart);
-            periodEnd.setDate(weekStart.getDate() + 6);
+            periodEnd = new Date(periodStart);
+            periodEnd.setDate(periodStart.getDate() + 6);
             
             // Format label
-            const weekStartStr = weekStart.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            const weekStartStr = periodStart.toLocaleDateString([], { month: 'short', day: 'numeric' });
             const weekEndStr = periodEnd.toLocaleDateString([], { month: 'short', day: 'numeric' });
             periodLabel = `${weekStartStr} - ${weekEndStr}`;
             
             // Move to next week
-            currentDate.setDate(weekStart.getDate() + 7);
+            currentDate.setDate(periodStart.getDate() + 7);
         } else {
             // Monthly aggregation
+            periodStart = new Date(currentDate);
             periodEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
             if (periodEnd > endDate) periodEnd = endDate;
             
@@ -3142,8 +3143,10 @@ function aggregateDataByPeriod(events, startDate, endDate, period, categories) {
         // Filter events for this period
         const periodEvents = events.filter(event => {
             const eventDate = new Date(event.start.dateTime || event.start.date);
-            return eventDate >= currentDate && eventDate <= periodEnd;
+            return eventDate >= periodStart && eventDate <= periodEnd;
         });
+        
+        console.log(`📊 Period ${periodLabel}: ${periodEvents.length} events found`);
         
         // Calculate totals for each category
         const categoryTotals = {};
@@ -3167,6 +3170,8 @@ function aggregateDataByPeriod(events, startDate, endDate, period, categories) {
                 }
             }
         });
+        
+        console.log(`📊 Period ${periodLabel} category totals:`, categoryTotals);
         
         aggregatedData.push({
             period: periodLabel,
