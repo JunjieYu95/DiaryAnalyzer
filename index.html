@@ -267,19 +267,19 @@
                     <form id="logForm" class="log-form">
                         <div class="form-group">
                             <label for="highlightDate">Date:</label>
-                            <input type="date" id="highlightDate" class="date-input" required>
+                            <input type="date" id="highlightDate" name="highlightDate" class="date-input" required>
                         </div>
                         <div class="form-group">
                             <label for="highlightTitle">Title:</label>
-                            <input type="text" id="highlightTitle" class="title-input" placeholder="Enter highlight or milestone title" required>
+                            <input type="text" id="highlightTitle" name="highlightTitle" class="title-input" placeholder="Enter highlight or milestone title" required>
                         </div>
                         <div class="form-group">
                             <label for="highlightDescription">Description:</label>
-                            <textarea id="highlightDescription" class="description-input" placeholder="Enter description (optional)"></textarea>
+                            <textarea id="highlightDescription" name="highlightDescription" class="description-input" placeholder="Enter description (optional)"></textarea>
                         </div>
                         <div class="form-group">
                             <label for="highlightType">Type:</label>
-                            <select id="highlightType" class="type-select" required>
+                            <select id="highlightType" name="highlightType" class="type-select" required>
                                 <option value="highlight">Highlight</option>
                                 <option value="milestone">Milestone</option>
                                 <option value="achievement">Achievement</option>
