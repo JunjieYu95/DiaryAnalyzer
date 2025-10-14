@@ -264,11 +264,11 @@ function setupEventListeners() {
         console.log('⚠️ Log button not found');
     }
     
-    // Log modal form submission
+    // Highlight modal form submission
     const logForm = document.getElementById('logForm');
     if (logForm) {
-        logForm.addEventListener('submit', handleLogSubmit);
-        console.log('✅ Log form listener added');
+        logForm.addEventListener('submit', handleHighlightSubmit);
+        console.log('✅ Highlight form listener added');
     }
     
     // Random recap button
@@ -1552,7 +1552,7 @@ function switchTab(tabName) {
 // Open highlights log modal
 function openHighlightsLogModal() {
     console.log('📝 Opening highlights log modal');
-    showLogModal();
+    showHighlightModal();
 }
 
 // Handle chart mode change
@@ -2232,9 +2232,9 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// Log Modal Functions
-async function showLogModal() {
-    console.log('📝 Opening log modal...');
+// Highlight Modal Functions (for logging highlights/milestones)
+function showHighlightModal() {
+    console.log('📝 Opening highlight modal...');
     
     const modal = document.getElementById('logModal');
     if (modal) {
@@ -2253,17 +2253,104 @@ async function showLogModal() {
             titleInput.focus();
         }
         
-        console.log('✅ Log modal opened');
+        console.log('✅ Highlight modal opened');
     } else {
-        console.error('❌ Log modal not found');
+        console.error('❌ Highlight modal not found');
     }
 }
 
-function closeLogModal() {
+function closeHighlightModal() {
     const modal = document.getElementById('logModal');
     if (modal) {
         modal.classList.add('hidden');
-        console.log('✅ Log modal closed');
+        console.log('✅ Highlight modal closed');
+    }
+}
+
+// Quick Log Modal Functions (for logging events with start/end times)
+async function showLogModal() {
+    console.log('📝 Opening Quick Log modal...');
+    
+    // Get the last event's end time as default start time (looks at past week)
+    const lastEventEndTime = await getLastEventEndTime();
+    const currentTime = new Date();
+    
+    console.log('🔍 DEBUG: Quick Log time calculation:');
+    console.log('  - lastEventEndTime:', lastEventEndTime ? lastEventEndTime.toLocaleString() : 'null');
+    console.log('  - currentTime:', currentTime.toLocaleString());
+    
+    // Format times for datetime-local input
+    const formatDateTimeLocal = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+    
+    const startTime = lastEventEndTime ? formatDateTimeLocal(lastEventEndTime) : formatDateTimeLocal(currentTime);
+    const endTime = formatDateTimeLocal(currentTime);
+    
+    console.log('  - startTime (formatted):', startTime);
+    console.log('  - endTime (formatted):', endTime);
+    
+    // Create modal HTML
+    const modalHTML = `
+        <div id="quickLogModal" class="log-modal">
+            <div class="log-modal-content">
+                <div class="log-modal-header">
+                    <h2>📝 Quick Log</h2>
+                    <button class="close-btn" onclick="closeLogModal()">&times;</button>
+                </div>
+                <form id="quickLogForm">
+                    <div class="form-group">
+                        <label for="eventTitle">Event Title *</label>
+                        <input type="text" id="eventTitle" name="eventTitle" placeholder="e.g., Team Meeting, Code Review" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventCalendar">Calendar</label>
+                        <select id="eventCalendar" name="eventCalendar">
+                            <option value="Actual Diary-Prod">Production Work</option>
+                            <option value="Actual Diary-Nonprod">Non-Production</option>
+                            <option value="Actual Diary-Admin/Rest/Routine">Admin & Rest</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventStart">Start Time</label>
+                        <input type="datetime-local" id="eventStart" name="eventStart" value="${startTime}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventEnd">End Time</label>
+                        <input type="datetime-local" id="eventEnd" name="eventEnd" value="${endTime}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventDescription">Description (Optional)</label>
+                        <textarea id="eventDescription" name="eventDescription" placeholder="Add any additional details..."></textarea>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeLogModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Create Event</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Add form submit handler
+    document.getElementById('quickLogForm').addEventListener('submit', handleQuickLogSubmit);
+    
+    console.log('✅ Quick Log modal opened with start time:', startTime, 'end time:', endTime);
+}
+
+function closeLogModal() {
+    const modal = document.getElementById('quickLogModal');
+    if (modal) {
+        modal.remove();
+        console.log('✅ Quick Log modal closed');
     }
 }
 
@@ -2363,7 +2450,56 @@ async function getLastEventEndTime() {
     return lastEventEndTime;
 }
 
-async function handleLogSubmit(event) {
+// Handle Quick Log form submission (for events with start/end times)
+async function handleQuickLogSubmit(event) {
+    event.preventDefault();
+    
+    const formData = new FormData(event.target);
+    const eventData = {
+        summary: formData.get('eventTitle'),
+        calendar: formData.get('eventCalendar'),
+        start: formData.get('eventStart'),
+        end: formData.get('eventEnd'),
+        description: formData.get('eventDescription') || ''
+    };
+    
+    console.log('📝 Creating quick log event:', eventData);
+    
+    try {
+        // Show loading state
+        const submitBtn = event.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = 'Creating...';
+        submitBtn.disabled = true;
+        
+        // Create the event via Google Calendar API
+        await createCalendarEvent(eventData);
+        
+        // Success
+        console.log('✅ Event created successfully');
+        closeLogModal();
+        
+        // Refresh the data to show the new event
+        await loadCalendarData();
+        
+        // Show detailed success message
+        const eventTitle = eventData.summary;
+        const startTime = new Date(eventData.start).toLocaleString();
+        alert(`✅ Event created successfully!\n\n📝 Title: ${eventTitle}\n⏰ Time: ${startTime}\n📅 Calendar: ${eventData.calendar}\n\nCheck your Google Calendar to see the event!`);
+        
+    } catch (error) {
+        console.error('❌ Failed to create event:', error);
+        alert('❌ Failed to create event: ' + error.message);
+        
+        // Reset button
+        const submitBtn = event.target.querySelector('button[type="submit"]');
+        submitBtn.textContent = 'Create Event';
+        submitBtn.disabled = false;
+    }
+}
+
+// Handle Highlight form submission (for highlights/milestones)
+async function handleHighlightSubmit(event) {
     event.preventDefault();
     
     const formData = new FormData(event.target);
@@ -2388,7 +2524,7 @@ async function handleLogSubmit(event) {
         
         // Success
         console.log('✅ Highlight saved successfully');
-        closeLogModal();
+        closeHighlightModal();
         
         // Refresh the calendar to show the new highlight
         displayCalendar();
