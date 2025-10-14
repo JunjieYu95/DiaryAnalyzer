@@ -3363,13 +3363,10 @@ function createCalendarDay(year, month, day) {
     if (isToday) dayElement.classList.add('today');
     if (isOtherMonth) dayElement.classList.add('other-month');
     
-    // Check for events and highlights
-    const dayEvents = getEventsForDate(date);
+    // Check for highlights only (no daily logger events in highlights tab)
     const dayHighlights = getHighlightsForDate(date);
     
-    if (dayEvents.length > 0) dayElement.classList.add('has-events');
     if (dayHighlights.length > 0) dayElement.classList.add('has-highlights');
-    if (dayEvents.length > 0 && dayHighlights.length > 0) dayElement.classList.add('has-both');
     
     // Create day content
     const dayNumber = document.createElement('div');
@@ -3379,14 +3376,7 @@ function createCalendarDay(year, month, day) {
     const indicators = document.createElement('div');
     indicators.className = 'day-indicators';
     
-    // Add event indicators
-    dayEvents.forEach(() => {
-        const indicator = document.createElement('div');
-        indicator.className = 'day-indicator';
-        indicators.appendChild(indicator);
-    });
-    
-    // Add highlight indicators
+    // Add highlight indicators only (no daily logger events in highlights tab)
     dayHighlights.forEach(highlight => {
         const indicator = document.createElement('div');
         indicator.className = `day-indicator ${highlight.type}`;
@@ -3396,8 +3386,8 @@ function createCalendarDay(year, month, day) {
     dayElement.appendChild(dayNumber);
     dayElement.appendChild(indicators);
     
-    // Add click event
-    dayElement.addEventListener('click', () => showDayDetails(date, dayEvents, dayHighlights));
+    // Add click event (only highlights, no daily logger events in highlights tab)
+    dayElement.addEventListener('click', () => showDayDetails(date, [], dayHighlights));
     
     return dayElement;
 }
