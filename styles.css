@@ -2532,6 +2532,44 @@ body {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
     position: relative;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 80vh; /* Fixed height for the main calendar view */
+}
+
+/* Calendar Scroll Container */
+.calendar-scroll-container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border-radius: 12px;
+    background: white;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    margin-top: 1rem;
+    position: relative;
+    /* Custom scrollbar styling */
+    scrollbar-width: thin;
+    scrollbar-color: #667eea #f1f5f9;
+}
+
+.calendar-scroll-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.calendar-scroll-container::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+}
+
+.calendar-scroll-container::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.calendar-scroll-container::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
 .main-calendar-view::before {
@@ -2633,6 +2671,7 @@ body {
     padding: 1.5rem;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
     margin-bottom: 2rem;
+    min-height: fit-content;
 }
 
 .calendar-grid {
@@ -3311,6 +3350,15 @@ body {
 
 /* Mobile responsive styles for calendar */
 @media (max-width: 768px) {
+    .main-calendar-view {
+        height: 70vh; /* Slightly smaller height on mobile */
+        padding: 1rem;
+    }
+    
+    .calendar-scroll-container {
+        margin-top: 0.5rem;
+    }
+    
     .calendar-container {
         padding: 0.5rem;
         margin-bottom: 1rem;
@@ -3386,6 +3434,15 @@ body {
 }
 
 @media (max-width: 480px) {
+    .main-calendar-view {
+        height: 65vh; /* Even smaller height on very small screens */
+        padding: 0.5rem;
+    }
+    
+    .calendar-scroll-container {
+        margin-top: 0.25rem;
+    }
+    
     .calendar-container {
         padding: 0.25rem;
         margin-bottom: 0.5rem;
