@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Button Test</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-content">
+                <h1>📊 Diary Analyzer - Button Test</h1>
+                <div class="controls">
+                    <button id="logButton" class="log-btn">📝 Quick Log</button>
+                    <button id="randomRecapBtn" class="random-recap-btn">🎲 Random Recap</button>
+                    <button id="refreshBtn" class="refresh-btn">🔄 Refresh</button>
+                    <button id="signOutBtn" class="signout-btn">🚪 Sign Out</button>
+                </div>
+            </div>
+        </header>
+    </div>
+    
+    <script>
+        console.log('Testing button visibility and clickability...');
+        
+        // Test button elements
+        const logButton = document.getElementById('logButton');
+        const randomRecapBtn = document.getElementById('randomRecapBtn');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const signOutBtn = document.getElementById('signOutBtn');
+        
+        console.log('Button elements found:');
+        console.log('  - logButton:', !!logButton);
+        console.log('  - randomRecapBtn:', !!randomRecapBtn);
+        console.log('  - refreshBtn:', !!refreshBtn);
+        console.log('  - signOutBtn:', !!signOutBtn);
+        
+        // Test button visibility
+        if (logButton) {
+            console.log('logButton visibility:', getComputedStyle(logButton).display);
+            console.log('logButton visibility (hidden class):', logButton.classList.contains('hidden'));
+        }
+        
+        if (randomRecapBtn) {
+            console.log('randomRecapBtn visibility:', getComputedStyle(randomRecapBtn).display);
+            console.log('randomRecapBtn visibility (hidden class):', randomRecapBtn.classList.contains('hidden'));
+        }
+        
+        if (refreshBtn) {
+            console.log('refreshBtn visibility:', getComputedStyle(refreshBtn).display);
+            console.log('refreshBtn visibility (hidden class):', refreshBtn.classList.contains('hidden'));
+        }
+        
+        if (signOutBtn) {
+            console.log('signOutBtn visibility:', getComputedStyle(signOutBtn).display);
+            console.log('signOutBtn visibility (hidden class):', signOutBtn.classList.contains('hidden'));
+        }
+        
+        // Test button click events
+        if (logButton) {
+            logButton.addEventListener('click', () => {
+                console.log('✅ Log button clicked!');
+                alert('Log button clicked!');
+            });
+        }
+        
+        if (randomRecapBtn) {
+            randomRecapBtn.addEventListener('click', () => {
+                console.log('✅ Random recap button clicked!');
+                alert('Random recap button clicked!');
+            });
+        }
+        
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => {
+                console.log('✅ Refresh button clicked!');
+                alert('Refresh button clicked!');
+            });
+        }
+        
+        if (signOutBtn) {
+            signOutBtn.addEventListener('click', () => {
+                console.log('✅ Sign out button clicked!');
+                alert('Sign out button clicked!');
+            });
+        }
+        
+        console.log('Button test setup complete!');
+    </script>
+</body>
+</html>
