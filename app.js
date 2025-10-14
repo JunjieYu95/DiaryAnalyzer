@@ -1491,32 +1491,35 @@ function onViewModeChange() {
     updateStats(); // Also update stats when view mode changes
 }
 
-// Tab switching functions (now only for analytics)
+// Tab switching functions
 function switchTab(tabName) {
     console.log('🔄 Switching to tab:', tabName);
+    console.log('🔄 Analytics tab element:', analyticsTab);
+    console.log('🔄 Highlights tab element:', highlightsTab);
+    console.log('🔄 Analytics tab content element:', analyticsTabContent);
+    console.log('🔄 Highlights tab content element:', highlightsTabContent);
+    
+    // Remove active class from all tabs and content
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
     
     if (tabName === 'analytics') {
-        // Show analytics view
-        document.getElementById('analyticsTabContent').classList.remove('hidden');
+        analyticsTab.classList.add('active');
+        analyticsTabContent.classList.add('active');
         displayCurrentView(); // Show the current analytics view
         updateStats();
-    } else if (tabName === 'calendar') {
-        // Show calendar view (main view)
-        document.getElementById('analyticsTabContent').classList.add('hidden');
+    } else if (tabName === 'highlights') {
+        highlightsTab.classList.add('active');
+        highlightsTabContent.classList.add('active');
+        console.log('🔄 Highlights tab content classes after adding active:', highlightsTabContent.classList.toString());
         displayCalendar(); // Show the calendar view
     }
 }
 
-// Open highlights log modal (placeholder for now)
+// Open highlights log modal
 function openHighlightsLogModal() {
     console.log('📝 Opening highlights log modal');
-    // For now, just focus on the existing highlight form
-    if (highlightDateInput) {
-        highlightDateInput.focus();
-        // Set today's date as default
-        const today = new Date().toISOString().split('T')[0];
-        highlightDateInput.value = today;
-    }
+    showLogModal();
 }
 
 // Handle chart mode change

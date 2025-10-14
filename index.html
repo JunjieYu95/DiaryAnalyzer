@@ -80,6 +80,14 @@
 
             <!-- Content Section -->
             <section id="contentSection" class="content-section">
+                <!-- Tab Navigation -->
+                <div class="tab-navigation">
+                    <button id="highlightsTab" class="tab-btn active">⭐ Highlights & Milestones</button>
+                    <button id="analyticsTab" class="tab-btn">📊 Analytics</button>
+                </div>
+                
+                <!-- Highlights Tab Content -->
+                <div id="highlightsTabContent" class="tab-content active">
                 <!-- Main Calendar View -->
                 <div class="main-calendar-view">
                     <div class="calendar-header">
@@ -89,7 +97,7 @@
                             <span id="currentYear" class="current-year">2024</span>
                             <button id="nextYear" class="calendar-nav-btn">Next Year →</button>
                         </div>
-                        <button id="logButton" class="log-btn">📝 Log Highlight</button>
+                        <button id="highlightsLogButton" class="log-btn">📝 Log Highlight</button>
                     </div>
                     <div class="calendar-wrapper">
                         <div id="calendarGrid" class="calendar-grid">
@@ -97,9 +105,10 @@
                         </div>
                     </div>
                 </div>
+                </div> <!-- End Highlights Tab Content -->
                 
-                <!-- Analytics Tab Content (Hidden by default) -->
-                <div id="analyticsTabContent" class="tab-content hidden">
+                <!-- Analytics Tab Content -->
+                <div id="analyticsTabContent" class="tab-content">
                     <!-- Analytics Controls -->
                     <div class="analytics-controls">
                         <select id="dateRange" class="date-selector">
