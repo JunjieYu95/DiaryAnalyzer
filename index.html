@@ -79,15 +79,27 @@
             </section>
 
             <!-- Content Section -->
-            <section id="contentSection" class="content-section hidden">
-                <!-- Tab Navigation -->
-                <div class="tab-navigation">
-                    <button id="analyticsTab" class="tab-btn active">📊 Analytics</button>
-                    <button id="highlightsTab" class="tab-btn">⭐ Highlights & Milestones</button>
+            <section id="contentSection" class="content-section">
+                <!-- Main Calendar View -->
+                <div class="main-calendar-view">
+                    <div class="calendar-header">
+                        <h2>⭐ Highlights & Milestones Calendar</h2>
+                        <div class="calendar-controls">
+                            <button id="prevYear" class="calendar-nav-btn">← Previous Year</button>
+                            <span id="currentYear" class="current-year">2024</span>
+                            <button id="nextYear" class="calendar-nav-btn">Next Year →</button>
+                        </div>
+                        <button id="logButton" class="log-btn">📝 Log Highlight</button>
+                    </div>
+                    <div class="calendar-wrapper">
+                        <div id="calendarGrid" class="calendar-grid">
+                            <!-- Calendar will be dynamically generated here -->
+                        </div>
+                    </div>
                 </div>
                 
-                <!-- Analytics Tab Content -->
-                <div id="analyticsTabContent" class="tab-content active">
+                <!-- Analytics Tab Content (Hidden by default) -->
+                <div id="analyticsTabContent" class="tab-content hidden">
                     <!-- Analytics Controls -->
                     <div class="analytics-controls">
                         <select id="dateRange" class="date-selector">
@@ -178,59 +190,6 @@
                     </div>
                 </div>
                 </div> <!-- End Analytics Tab Content -->
-
-                <!-- Highlights Tab Content -->
-                <div id="highlightsTabContent" class="tab-content">
-                    <div class="highlights-header">
-                        <h2>⭐ Highlights & Milestones</h2>
-                        <p>Track your important moments and achievements</p>
-                        <button id="highlightsLogButton" class="highlights-log-btn">📝 Log Highlight</button>
-                    </div>
-
-                    <!-- Calendar View -->
-                    <div id="calendarContainer" class="calendar-container">
-                    <div class="calendar-header">
-                        <h3>Highlights & Milestones Calendar</h3>
-                        <div class="calendar-controls">
-                            <button id="prevYear" class="calendar-nav-btn">← Previous Year</button>
-                            <span id="currentYear" class="current-year">2024</span>
-                            <button id="nextYear" class="calendar-nav-btn">Next Year →</button>
-                        </div>
-                    </div>
-                    <div class="calendar-wrapper">
-                        <div id="calendarGrid" class="calendar-grid">
-                            <!-- Calendar will be dynamically generated here -->
-                        </div>
-                    </div>
-                    <div class="highlights-log">
-                        <h4>Add Highlight or Milestone</h4>
-                        <div class="log-form">
-                            <div class="form-group">
-                                <label for="highlightDate">Date:</label>
-                                <input type="date" id="highlightDate" class="date-input">
-                            </div>
-                            <div class="form-group">
-                                <label for="highlightTitle">Title:</label>
-                                <input type="text" id="highlightTitle" class="title-input" placeholder="Enter highlight or milestone title">
-                            </div>
-                            <div class="form-group">
-                                <label for="highlightDescription">Description:</label>
-                                <textarea id="highlightDescription" class="description-input" placeholder="Enter description (optional)"></textarea>
-                            </div>
-                            <div class="form-group">
-                                <label for="highlightType">Type:</label>
-                                <select id="highlightType" class="type-select">
-                                    <option value="highlight">Highlight</option>
-                                    <option value="milestone">Milestone</option>
-                                    <option value="achievement">Achievement</option>
-                                    <option value="memory">Memory</option>
-                                </select>
-                            </div>
-                            <button id="saveHighlight" class="save-highlight-btn">💾 Save Highlight</button>
-                        </div>
-                    </div>
-                </div>
-                </div> <!-- End Highlights Tab Content -->
             </section>
         </main>
         
@@ -283,6 +242,46 @@
                         <p>Finding a random day with activities...</p>
                     </div>
                     <div id="randomRecapResults"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log Highlight Popup Modal -->
+        <div id="logModal" class="log-modal hidden">
+            <div class="log-modal-content">
+                <div class="log-modal-header">
+                    <h2>📝 Log Highlight or Milestone</h2>
+                    <button class="log-modal-close" onclick="closeLogModal()">&times;</button>
+                </div>
+                
+                <div class="log-modal-body">
+                    <form id="logForm" class="log-form">
+                        <div class="form-group">
+                            <label for="highlightDate">Date:</label>
+                            <input type="date" id="highlightDate" class="date-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="highlightTitle">Title:</label>
+                            <input type="text" id="highlightTitle" class="title-input" placeholder="Enter highlight or milestone title" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="highlightDescription">Description:</label>
+                            <textarea id="highlightDescription" class="description-input" placeholder="Enter description (optional)"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="highlightType">Type:</label>
+                            <select id="highlightType" class="type-select" required>
+                                <option value="highlight">Highlight</option>
+                                <option value="milestone">Milestone</option>
+                                <option value="achievement">Achievement</option>
+                                <option value="memory">Memory</option>
+                            </select>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="cancel-btn" onclick="closeLogModal()">Cancel</button>
+                            <button type="submit" class="save-highlight-btn">💾 Save Highlight</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>

@@ -115,6 +115,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     highlightsTabContent = document.getElementById('highlightsTabContent');
     highlightsLogButton = document.getElementById('highlightsLogButton');
     
+    // Initialize calendar as main view
+    displayCalendar();
+    
     // Check if authentication completed before app loaded
     if (window.authCompleted || window.globalAccessToken) {
         console.log('✅ Authentication completed before app loaded, processing...');
@@ -259,6 +262,13 @@ function setupEventListeners() {
         console.log('✅ Log button listener added');
     } else {
         console.log('⚠️ Log button not found');
+    }
+    
+    // Log modal form submission
+    const logForm = document.getElementById('logForm');
+    if (logForm) {
+        logForm.addEventListener('submit', handleLogSubmit);
+        console.log('✅ Log form listener added');
     }
     
     // Random recap button
@@ -1481,27 +1491,18 @@ function onViewModeChange() {
     updateStats(); // Also update stats when view mode changes
 }
 
-// Tab switching functions
+// Tab switching functions (now only for analytics)
 function switchTab(tabName) {
     console.log('🔄 Switching to tab:', tabName);
-    console.log('🔄 Analytics tab element:', analyticsTab);
-    console.log('🔄 Highlights tab element:', highlightsTab);
-    console.log('🔄 Analytics tab content element:', analyticsTabContent);
-    console.log('🔄 Highlights tab content element:', highlightsTabContent);
-    
-    // Remove active class from all tabs and content
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
     
     if (tabName === 'analytics') {
-        analyticsTab.classList.add('active');
-        analyticsTabContent.classList.add('active');
+        // Show analytics view
+        document.getElementById('analyticsTabContent').classList.remove('hidden');
         displayCurrentView(); // Show the current analytics view
         updateStats();
-    } else if (tabName === 'highlights') {
-        highlightsTab.classList.add('active');
-        highlightsTabContent.classList.add('active');
-        console.log('🔄 Highlights tab content classes after adding active:', highlightsTabContent.classList.toString());
+    } else if (tabName === 'calendar') {
+        // Show calendar view (main view)
+        document.getElementById('analyticsTabContent').classList.add('hidden');
         displayCalendar(); // Show the calendar view
     }
 }
@@ -2199,85 +2200,33 @@ document.head.appendChild(style);
 async function showLogModal() {
     console.log('📝 Opening log modal...');
     
-    // Get the last event's end time as default start time (looks at past week)
-    const lastEventEndTime = await getLastEventEndTime();
-    const currentTime = new Date();
-    
-    console.log('🔍 DEBUG: Quick Log time calculation:');
-    console.log('  - lastEventEndTime:', lastEventEndTime ? lastEventEndTime.toLocaleString() : 'null');
-    console.log('  - currentTime:', currentTime.toLocaleString());
-    
-    // Format times for datetime-local input
-    const formatDateTimeLocal = (date) => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        return `${year}-${month}-${day}T${hours}:${minutes}`;
-    };
-    
-    const startTime = lastEventEndTime ? formatDateTimeLocal(lastEventEndTime) : formatDateTimeLocal(currentTime);
-    const endTime = formatDateTimeLocal(currentTime);
-    
-    console.log('  - startTime (formatted):', startTime);
-    console.log('  - endTime (formatted):', endTime);
-    
-    // Create modal HTML
-    const modalHTML = `
-        <div id="logModal" class="log-modal">
-            <div class="log-modal-content">
-                <div class="log-modal-header">
-                    <h2>📝 Quick Log</h2>
-                    <button class="close-btn" onclick="closeLogModal()">&times;</button>
-                </div>
-                <form id="logForm">
-                    <div class="form-group">
-                        <label for="eventTitle">Event Title *</label>
-                        <input type="text" id="eventTitle" name="eventTitle" placeholder="e.g., Team Meeting, Code Review" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="eventCalendar">Calendar</label>
-                        <select id="eventCalendar" name="eventCalendar">
-                            <option value="Actual Diary-Prod">Production Work</option>
-                            <option value="Actual Diary-Nonprod">Non-Production</option>
-                            <option value="Actual Diary-Admin/Rest/Routine">Admin & Rest</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="eventStart">Start Time</label>
-                        <input type="datetime-local" id="eventStart" name="eventStart" value="${startTime}" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="eventEnd">End Time</label>
-                        <input type="datetime-local" id="eventEnd" name="eventEnd" value="${endTime}" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="eventDescription">Description (Optional)</label>
-                        <textarea id="eventDescription" name="eventDescription" placeholder="Add any additional details..."></textarea>
-                    </div>
-                    <div class="modal-actions">
-                        <button type="button" class="btn btn-secondary" onclick="closeLogModal()">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Create Event</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    `;
-    
-    // Add modal to page
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-    
-    // Add form submit handler
-    document.getElementById('logForm').addEventListener('submit', handleLogSubmit);
-    
-    console.log('✅ Log modal opened with start time:', startTime, 'end time:', endTime);
+    const modal = document.getElementById('logModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        
+        // Set today's date as default
+        const today = new Date().toISOString().split('T')[0];
+        const dateInput = document.getElementById('highlightDate');
+        if (dateInput) {
+            dateInput.value = today;
+        }
+        
+        // Focus on title input
+        const titleInput = document.getElementById('highlightTitle');
+        if (titleInput) {
+            titleInput.focus();
+        }
+        
+        console.log('✅ Log modal opened');
+    } else {
+        console.error('❌ Log modal not found');
+    }
 }
 
 function closeLogModal() {
     const modal = document.getElementById('logModal');
     if (modal) {
-        modal.remove();
+        modal.classList.add('hidden');
         console.log('✅ Log modal closed');
     }
 }
@@ -2382,45 +2331,42 @@ async function handleLogSubmit(event) {
     event.preventDefault();
     
     const formData = new FormData(event.target);
-    const eventData = {
-        summary: formData.get('eventTitle'),
-        calendar: formData.get('eventCalendar'),
-        start: formData.get('eventStart'),
-        end: formData.get('eventEnd'),
-        description: formData.get('eventDescription') || ''
+    const highlightData = {
+        date: formData.get('highlightDate'),
+        title: formData.get('highlightTitle'),
+        description: formData.get('highlightDescription') || '',
+        type: formData.get('highlightType')
     };
     
-    console.log('📝 Creating event:', eventData);
+    console.log('📝 Creating highlight:', highlightData);
     
     try {
         // Show loading state
         const submitBtn = event.target.querySelector('button[type="submit"]');
         const originalText = submitBtn.textContent;
-        submitBtn.textContent = 'Creating...';
+        submitBtn.textContent = 'Saving...';
         submitBtn.disabled = true;
         
-        // Create the event via Google Calendar API
-        await createCalendarEvent(eventData);
+        // Save the highlight
+        await saveHighlight(highlightData);
         
         // Success
-        console.log('✅ Event created successfully');
+        console.log('✅ Highlight saved successfully');
         closeLogModal();
         
-        // Refresh the data to show the new event
-        await loadCalendarData();
+        // Refresh the calendar to show the new highlight
+        displayCalendar();
         
-        // Show detailed success message
-        const eventTitle = eventData.summary;
-        const startTime = new Date(eventData.start).toLocaleString();
-        alert(`✅ Event created successfully!\n\n📝 Title: ${eventTitle}\n⏰ Time: ${startTime}\n📅 Calendar: ${eventData.calendar}\n\nCheck your Google Calendar to see the event!`);
+        // Show success message
+        alert(`✅ Highlight saved successfully!\n\n📝 Title: ${highlightData.title}\n📅 Date: ${highlightData.date}\n⭐ Type: ${highlightData.type}`);
         
     } catch (error) {
-        console.error('❌ Failed to create event:', error);
-        alert('❌ Failed to create event: ' + error.message);
+        console.error('❌ Failed to save highlight:', error);
+        alert('❌ Failed to save highlight: ' + error.message);
         
         // Reset button
         const submitBtn = event.target.querySelector('button[type="submit"]');
-        submitBtn.textContent = 'Create Event';
+        submitBtn.textContent = '💾 Save Highlight';
         submitBtn.disabled = false;
     }
 }
@@ -3627,23 +3573,32 @@ function getColorIdForType(type) {
     return colorMap[type] || '6';
 }
 
-async function saveHighlight() {
-    const date = highlightDateInput.value;
-    const title = highlightTitleInput.value.trim();
-    const description = highlightDescriptionInput.value.trim();
-    const type = highlightTypeSelect.value;
-    
-    if (!date || !title) {
-        alert('Please fill in the date and title fields.');
-        return;
+async function saveHighlight(highlightData) {
+    if (!highlightData) {
+        // Fallback to form inputs if no data provided
+        const date = highlightDateInput?.value;
+        const title = highlightTitleInput?.value?.trim();
+        const description = highlightDescriptionInput?.value?.trim();
+        const type = highlightTypeSelect?.value;
+        
+        if (!date || !title) {
+            throw new Error('Please fill in the date and title fields.');
+        }
+        
+        highlightData = {
+            date: date,
+            title: title,
+            description: description,
+            type: type
+        };
     }
     
     const highlight = {
         id: Date.now().toString(),
-        date: date,
-        title: title,
-        description: description,
-        type: type,
+        date: highlightData.date,
+        title: highlightData.title,
+        description: highlightData.description || '',
+        type: highlightData.type,
         createdAt: new Date().toISOString()
     };
     
@@ -3655,18 +3610,7 @@ async function saveHighlight() {
         highlightsData.push(highlight);
         localStorage.setItem('highlightsData', JSON.stringify(highlightsData));
         
-        // Clear form
-        highlightTitleInput.value = '';
-        highlightDescriptionInput.value = '';
-        highlightTypeSelect.value = 'highlight';
-        
-        // Refresh calendar if it's currently displayed
-        if (highlightsTab && highlightsTab.classList.contains('active')) {
-            generateCalendarGrid();
-        }
-        
         console.log('💾 Highlight saved to Google Calendar:', highlight);
-        alert('Highlight saved successfully to Google Calendar!');
         
     } catch (error) {
         console.error('❌ Error saving highlight to Google Calendar:', error);
@@ -3675,12 +3619,7 @@ async function saveHighlight() {
         highlightsData.push(highlight);
         localStorage.setItem('highlightsData', JSON.stringify(highlightsData));
         
-        // Clear form
-        highlightTitleInput.value = '';
-        highlightDescriptionInput.value = '';
-        highlightTypeSelect.value = 'highlight';
-        
-        alert('Highlight saved locally (Google Calendar unavailable).');
+        console.log('💾 Highlight saved locally:', highlight);
     }
 }
 
