@@ -8,6 +8,34 @@ let allEvents = [];
 let currentYear = new Date().getFullYear();
 let highlightsData = JSON.parse(localStorage.getItem('highlightsData') || '[]');
 
+// Add test highlights for debugging
+function addTestHighlights() {
+    const testHighlights = [
+        {
+            id: 'test-1',
+            title: 'Test Highlight 1',
+            description: 'This is a test highlight for October 12',
+            date: '2024-10-12',
+            type: 'highlight'
+        },
+        {
+            id: 'test-2', 
+            title: 'Test Milestone',
+            description: 'This is a test milestone for October 13',
+            date: '2024-10-13',
+            type: 'milestone'
+        }
+    ];
+    
+    // Only add if not already present
+    const existingTest = highlightsData.find(h => h.id === 'test-1');
+    if (!existingTest) {
+        highlightsData.push(...testHighlights);
+        localStorage.setItem('highlightsData', JSON.stringify(highlightsData));
+        console.log('📅 Added test highlights:', testHighlights);
+    }
+}
+
 // Helper to get access token (works with both local and window scope)
 function getAccessToken() {
     return window.accessToken || window.globalAccessToken || null;
@@ -3235,6 +3263,7 @@ function displayCalendar() {
     console.log('📅 Calendar container element:', calendarContainer);
     console.log('📅 Calendar grid element:', calendarGrid);
     updateCurrentYearDisplay();
+    addTestHighlights(); // Add test highlights for debugging
     generateCalendarGrid();
 }
 
@@ -3263,24 +3292,43 @@ function generateCalendarGrid() {
     calendarGrid.innerHTML = '';
     
     // Add day headers
-    const dayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayHeaders = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     dayHeaders.forEach(day => {
         const header = document.createElement('div');
         header.className = 'calendar-day-header';
         header.textContent = day;
         header.style.cssText = `
             background: #f8fafc;
-            padding: 0.5rem;
+            padding: 0.75rem 0.5rem;
             text-align: center;
             font-weight: 600;
             color: #4a5568;
             border-bottom: 2px solid #e2e8f0;
+            font-size: 0.9rem;
         `;
         calendarGrid.appendChild(header);
     });
     
     // Generate calendar for the entire year
     for (let month = 0; month < 12; month++) {
+        // Add month header
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+        const monthHeader = document.createElement('div');
+        monthHeader.className = 'calendar-month-header';
+        monthHeader.textContent = monthNames[month] + ' ' + currentYear;
+        monthHeader.style.cssText = `
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem;
+            text-align: center;
+            font-weight: 700;
+            font-size: 1.25rem;
+            border-radius: 8px 8px 0 0;
+            margin-top: ${month > 0 ? '1rem' : '0'};
+        `;
+        calendarGrid.appendChild(monthHeader);
         const firstDay = new Date(currentYear, month, 1);
         const lastDay = new Date(currentYear, month + 1, 0);
         const daysInMonth = lastDay.getDate();
@@ -3370,7 +3418,9 @@ function getEventsForDate(date) {
 
 function getHighlightsForDate(date) {
     const dateStr = date.toISOString().split('T')[0];
-    return highlightsData.filter(highlight => highlight.date === dateStr);
+    const highlights = highlightsData.filter(highlight => highlight.date === dateStr);
+    console.log(`📅 Checking highlights for ${dateStr}:`, highlights);
+    return highlights;
 }
 
 function showDayDetails(date, events, highlights) {
