@@ -3033,9 +3033,29 @@ body {
     width: 500px;
     box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4);
     position: relative;
-    overflow: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     transform: scale(0.9) translateY(20px);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(102, 126, 234, 0.3) transparent;
+}
+
+.log-modal-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.log-modal-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.log-modal-content::-webkit-scrollbar-thumb {
+    background-color: rgba(102, 126, 234, 0.3);
+    border-radius: 4px;
+}
+
+.log-modal-content::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(102, 126, 234, 0.5);
 }
 
 .log-modal:not(.hidden) .log-modal-content {
@@ -3044,7 +3064,8 @@ body {
 
 .log-modal-content::before {
     content: '';
-    position: absolute;
+    position: sticky;
+    position: -webkit-sticky;
     top: 0;
     left: 0;
     right: 0;
@@ -3053,6 +3074,8 @@ body {
     background-size: 200% 100%;
     animation: gradientShift 3s ease-in-out infinite;
     border-radius: 24px 24px 0 0;
+    z-index: 1;
+    display: block;
 }
 
 .log-modal-header {
@@ -3194,10 +3217,17 @@ body {
 
 /* Mobile responsive styles for log modal */
 @media (max-width: 768px) {
+    .log-modal {
+        align-items: flex-start;
+        padding-top: 2vh;
+    }
+    
     .log-modal-content {
         max-width: 95vw;
+        max-height: 95vh;
         padding: 1.5rem;
         margin: 1rem;
+        width: auto;
     }
     
     .log-modal-header h2 {
@@ -3218,18 +3248,22 @@ body {
     .log-modal-content {
         padding: 1rem;
         margin: 0.5rem;
+        max-height: 96vh;
     }
     
     .log-modal-header {
-        flex-direction: column;
-        gap: 1rem;
-        text-align: center;
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+    }
+    
+    .log-modal-header h2 {
+        font-size: 1.15rem;
     }
     
     .log-modal-close {
-        position: absolute;
-        top: 1rem;
-        right: 1rem;
+        width: 2rem;
+        height: 2rem;
+        font-size: 1.25rem;
     }
 }
 
