@@ -1491,18 +1491,27 @@ function onViewModeChange() {
     updateStats(); // Also update stats when view mode changes
 }
 
-// Tab switching functions (now only for analytics)
+// Tab switching functions
 function switchTab(tabName) {
     console.log('🔄 Switching to tab:', tabName);
     
+    // Update tab button states
+    const highlightsTab = document.getElementById('highlightsTab');
+    const analyticsTab = document.getElementById('analyticsTab');
+    const analyticsTabContent = document.getElementById('analyticsTabContent');
+    
     if (tabName === 'analytics') {
         // Show analytics view
-        document.getElementById('analyticsTabContent').classList.remove('hidden');
+        analyticsTabContent.classList.remove('hidden');
+        highlightsTab.classList.remove('active');
+        analyticsTab.classList.add('active');
         displayCurrentView(); // Show the current analytics view
         updateStats();
-    } else if (tabName === 'calendar') {
-        // Show calendar view (main view)
-        document.getElementById('analyticsTabContent').classList.add('hidden');
+    } else if (tabName === 'highlights') {
+        // Show highlights/calendar view (main view)
+        analyticsTabContent.classList.add('hidden');
+        highlightsTab.classList.add('active');
+        analyticsTab.classList.remove('active');
         displayCalendar(); // Show the calendar view
     }
 }
