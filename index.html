@@ -42,21 +42,6 @@
                 <h1>📊 Diary Analyzer</h1>
                 <p class="header-subtitle">Beautiful time series visualization for your Google Calendar diary entries</p>
                 <div class="controls">
-                    <select id="dateRange" class="date-selector">
-                        <option value="today">Today</option>
-                        <option value="week">This Week</option>
-                        <option value="month">This Month</option>
-                        <option value="quarter">This Quarter</option>
-                        <option value="year">This Year</option>
-                    </select>
-                    <select id="viewMode" class="view-selector">
-                        <option value="distribution">Distribution</option>
-                        <option value="timeline">Timeline</option>
-                        <option value="advanced">Advanced Analytics</option>
-                        <option value="aggregated">Category Trends</option>
-                    </select>
-                    <button id="logButton" class="log-btn">📝 Quick Log</button>
-                    <button id="randomRecapBtn" class="random-recap-btn">🎲 Random Recap</button>
                     <button id="refreshBtn" class="refresh-btn">🔄 Refresh</button>
                     <button id="signOutBtn" class="signout-btn hidden">🚪 Sign Out</button>
                 </div>
@@ -103,6 +88,25 @@
                 
                 <!-- Analytics Tab Content -->
                 <div id="analyticsTabContent" class="tab-content active">
+                    <!-- Analytics Controls -->
+                    <div class="analytics-controls">
+                        <select id="dateRange" class="date-selector">
+                            <option value="today">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="quarter">This Quarter</option>
+                            <option value="year">This Year</option>
+                        </select>
+                        <select id="viewMode" class="view-selector">
+                            <option value="distribution">Distribution</option>
+                            <option value="timeline">Timeline</option>
+                            <option value="advanced">Advanced Analytics</option>
+                            <option value="aggregated">Category Trends</option>
+                        </select>
+                        <button id="logButton" class="log-btn">📝 Quick Log</button>
+                        <button id="randomRecapBtn" class="random-recap-btn">🎲 Random Recap</button>
+                    </div>
+                    
                     <div class="stats-container">
                     <div class="stat-card">
                         <h3>Total Events</h3>
