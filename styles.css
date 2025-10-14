@@ -2633,6 +2633,8 @@ body {
     padding: 1.5rem;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
     margin-bottom: 2rem;
+    max-height: 70vh;
+    overflow-y: auto;
 }
 
 .calendar-grid {
@@ -3341,7 +3343,9 @@ body {
     .calendar-wrapper {
         padding: 0.5rem;
         overflow-x: auto;
+        overflow-y: auto;
         min-width: 100%;
+        max-height: 60vh;
     }
     
     .calendar-grid {
@@ -3393,6 +3397,7 @@ body {
     
     .calendar-wrapper {
         padding: 0.25rem;
+        max-height: 55vh;
     }
     
     .calendar-grid {
