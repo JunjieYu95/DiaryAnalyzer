@@ -2096,9 +2096,12 @@ style.textContent = `
         border-radius: 12px;
         padding: 30px;
         max-width: 600px;
+        max-height: 90vh;
         min-width: 500px;
         width: 90%;
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
     }
     .log-modal-header {
         display: flex;
@@ -2189,8 +2192,13 @@ style.textContent = `
     
     /* Mobile responsive styles for log modal */
     @media (max-width: 768px) {
+        .log-modal {
+            padding-top: 2vh;
+        }
+        
         .log-modal-content {
             max-width: 95vw;
+            max-height: 95vh;
             min-width: 90vw;
             padding: 20px;
             margin: 10px;
@@ -2217,10 +2225,11 @@ style.textContent = `
         .log-modal-content {
             padding: 15px;
             margin: 5px;
+            max-height: 96vh;
         }
         
         .log-modal h2 {
-            font-size: 1.5rem;
+            font-size: 1.25rem;
         }
         
         .close-btn {
