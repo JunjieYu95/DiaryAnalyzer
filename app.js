@@ -3406,6 +3406,35 @@ function navigateYear(direction) {
     generateCalendarGrid();
 }
 
+// Responsive resize handler for calendar
+let resizeTimeout;
+window.addEventListener('resize', () => {
+    // Debounce resize events for performance
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+        // Regenerate calendar if screen size crosses mobile breakpoints
+        const currentWidth = window.innerWidth;
+        const wasMobile = currentWidth <= 768;
+        const wasTinyMobile = currentWidth <= 480;
+        
+        // Only regenerate if we cross a breakpoint
+        if (calendarGrid && calendarGrid.children.length > 0) {
+            const firstHeader = calendarGrid.querySelector('.calendar-day-header');
+            if (firstHeader) {
+                const currentText = firstHeader.textContent;
+                const shouldBeShort = wasMobile;
+                const isShort = currentText.length <= 3;
+                
+                // Regenerate if format should change
+                if (shouldBeShort !== isShort) {
+                    console.log('📱 Screen size changed, regenerating calendar for responsive layout');
+                    generateCalendarGrid();
+                }
+            }
+        }
+    }, 250); // 250ms debounce
+});
+
 function generateCalendarGrid() {
     console.log('📅 generateCalendarGrid called');
     console.log('📅 calendarGrid element:', calendarGrid);
@@ -3418,20 +3447,30 @@ function generateCalendarGrid() {
     // Clear existing calendar
     calendarGrid.innerHTML = '';
     
-    // Add day headers
+    // Add day headers - responsive to screen size
     const dayHeaders = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    dayHeaders.forEach(day => {
+    const dayHeadersShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayHeadersMin = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    
+    // Determine which header format to use based on screen width
+    const isMobile = window.innerWidth <= 768;
+    const isTinyMobile = window.innerWidth <= 480;
+    const headerTexts = isTinyMobile ? dayHeadersShort : (isMobile ? dayHeadersShort : dayHeaders);
+    
+    headerTexts.forEach((day, index) => {
         const header = document.createElement('div');
         header.className = 'calendar-day-header';
         header.textContent = day;
+        // Add full day name as title for accessibility
+        header.title = dayHeaders[index];
         header.style.cssText = `
             background: #f8fafc;
-            padding: 0.75rem 0.5rem;
+            padding: clamp(0.4rem, 1.5vw, 0.75rem) clamp(0.15rem, 1vw, 0.5rem);
             text-align: center;
             font-weight: 600;
             color: #4a5568;
             border-bottom: 2px solid #e2e8f0;
-            font-size: 0.9rem;
+            font-size: clamp(0.65rem, 1.8vw, 0.9rem);
         `;
         calendarGrid.appendChild(header);
     });
