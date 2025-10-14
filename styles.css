@@ -3053,17 +3053,228 @@ body {
     }
 }
 
+/* Log Highlight Modal Styles */
+.log-highlight-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(8px);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.log-highlight-modal:not(.hidden) {
+    opacity: 1;
+    visibility: visible;
+}
+
+.log-highlight-modal-content {
+    background: white;
+    border-radius: 24px;
+    padding: 2rem;
+    max-width: 90vw;
+    max-height: 90vh;
+    width: 600px;
+    box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4);
+    position: relative;
+    overflow: hidden;
+    transform: scale(0.9) translateY(20px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.log-highlight-modal:not(.hidden) .log-highlight-modal-content {
+    transform: scale(1) translateY(0);
+}
+
+.log-highlight-modal-content::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #fbbf24, #f59e0b, #fbbf24);
+    background-size: 200% 100%;
+    animation: gradientShift 3s ease-in-out infinite;
+    border-radius: 24px 24px 0 0;
+}
+
+.log-highlight-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #f1f5f9;
+}
+
+.log-highlight-header h2 {
+    margin: 0;
+    color: #1a1a1a;
+    font-size: 1.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.log-highlight-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #6b7280;
+    padding: 0.5rem;
+    border-radius: 50%;
+    transition: all 0.2s;
+    width: 2.5rem;
+    height: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.log-highlight-close:hover {
+    background: #f3f4f6;
+    color: #374151;
+    transform: scale(1.1);
+}
+
+.log-highlight-content {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.log-highlight-content .log-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.log-highlight-content .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.log-highlight-content .form-group label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #4a5568;
+}
+
+.log-highlight-content .date-input,
+.log-highlight-content .title-input,
+.log-highlight-content .description-input,
+.log-highlight-content .type-select {
+    padding: 0.75rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    background: white;
+}
+
+.log-highlight-content .date-input:focus,
+.log-highlight-content .title-input:focus,
+.log-highlight-content .description-input:focus,
+.log-highlight-content .type-select:focus {
+    outline: none;
+    border-color: #fbbf24;
+    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.1);
+}
+
+.log-highlight-content .description-input {
+    resize: vertical;
+    min-height: 80px;
+    grid-column: 1 / -1;
+}
+
+.log-highlight-content .save-highlight-btn {
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    color: white;
+    border: none;
+    padding: 0.875rem 1.5rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 16px rgba(251, 191, 36, 0.25);
+    grid-column: 1 / -1;
+    justify-self: center;
+    min-width: 200px;
+}
+
+.log-highlight-content .save-highlight-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(251, 191, 36, 0.35);
+}
+
+.log-highlight-content .save-highlight-btn:active {
+    transform: translateY(0);
+}
+
+/* Mobile responsive styles for log highlight modal */
+@media (max-width: 768px) {
+    .log-highlight-modal-content {
+        max-width: 95vw;
+        padding: 1.5rem;
+        margin: 1rem;
+    }
+    
+    .log-highlight-header h2 {
+        font-size: 1.25rem;
+    }
+    
+    .log-highlight-content .log-form {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .log-highlight-modal-content {
+        padding: 1rem;
+        margin: 0.5rem;
+    }
+    
+    .log-highlight-header {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    
+    .log-highlight-close {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+    }
+}
+
 /* Mobile responsive styles for calendar */
 @media (max-width: 768px) {
     .calendar-container {
-        padding: 1rem;
+        padding: 0.5rem;
         margin-bottom: 1rem;
+        overflow-x: auto;
     }
     
     .calendar-header {
         flex-direction: column;
         text-align: center;
         gap: 1rem;
+        padding: 0.5rem;
     }
     
     .calendar-header h3 {
@@ -3078,33 +3289,35 @@ body {
     .calendar-nav-btn {
         width: 100%;
         min-width: auto;
+        padding: 0.75rem 1rem;
+        font-size: 0.9rem;
     }
     
     .calendar-wrapper {
-        padding: 1rem;
+        padding: 0.5rem;
+        overflow-x: auto;
+    }
+    
+    .calendar-grid {
+        min-width: 100%;
+        width: max-content;
     }
     
     .calendar-day {
-        min-height: 6vh;
+        min-height: 8vh;
         padding: 0.25rem;
+        min-width: 12vw;
+        font-size: 0.8rem;
     }
     
     .day-number {
         font-size: 0.8rem;
+        font-weight: 600;
     }
     
     .day-indicator {
         width: 4px;
         height: 4px;
-    }
-    
-    .highlights-log {
-        padding: 1rem;
-    }
-    
-    .log-form {
-        grid-template-columns: 1fr;
-        gap: 0.75rem;
     }
     
     .day-details-modal-content {
@@ -3119,13 +3332,38 @@ body {
 }
 
 @media (max-width: 480px) {
+    .calendar-container {
+        padding: 0.25rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .calendar-header {
+        padding: 0.25rem;
+    }
+    
+    .calendar-header h3 {
+        font-size: 1.25rem;
+    }
+    
+    .calendar-wrapper {
+        padding: 0.25rem;
+    }
+    
     .calendar-day {
-        min-height: 5vh;
-        padding: 0.2rem;
+        min-height: 6vh;
+        padding: 0.15rem;
+        min-width: 14vw;
+        font-size: 0.75rem;
     }
     
     .day-number {
         font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .day-indicator {
+        width: 3px;
+        height: 3px;
     }
     
     .day-details-modal-content {

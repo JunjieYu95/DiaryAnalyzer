@@ -2282,6 +2282,37 @@ function closeLogModal() {
     }
 }
 
+// Highlights Log Modal Functions
+function openHighlightsLogModal() {
+    console.log('📝 Opening highlights log modal...');
+    const modal = document.getElementById('logHighlightModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        // Set today's date as default
+        const today = new Date().toISOString().split('T')[0];
+        const dateInput = document.getElementById('highlightDate');
+        if (dateInput) {
+            dateInput.value = today;
+        }
+        console.log('✅ Highlights log modal opened');
+    } else {
+        console.error('❌ Highlights log modal not found');
+    }
+}
+
+function closeLogHighlightModal() {
+    const modal = document.getElementById('logHighlightModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        // Clear form
+        const form = modal.querySelector('.log-form');
+        if (form) {
+            form.reset();
+        }
+        console.log('✅ Highlights log modal closed');
+    }
+}
+
 async function getLastEventEndTime() {
     console.log('🔍 getLastEventEndTime called:');
     
@@ -3660,6 +3691,9 @@ async function saveHighlight() {
         highlightDescriptionInput.value = '';
         highlightTypeSelect.value = 'highlight';
         
+        // Close the modal
+        closeLogHighlightModal();
+        
         // Refresh calendar if it's currently displayed
         if (highlightsTab && highlightsTab.classList.contains('active')) {
             generateCalendarGrid();
@@ -3680,9 +3714,19 @@ async function saveHighlight() {
         highlightDescriptionInput.value = '';
         highlightTypeSelect.value = 'highlight';
         
-        alert('Highlight saved locally (Google Calendar unavailable).');
+        // Close the modal
+        closeLogHighlightModal();
+        
+        // Refresh calendar if it's currently displayed
+        if (highlightsTab && highlightsTab.classList.contains('active')) {
+            generateCalendarGrid();
+        }
+        
+        console.log('💾 Highlight saved locally:', highlight);
+        alert('Highlight saved locally (Google Calendar sync failed).');
     }
 }
 
 // Make functions globally available
 window.closeDayDetailsModal = closeDayDetailsModal;
+window.closeLogHighlightModal = closeLogHighlightModal;
