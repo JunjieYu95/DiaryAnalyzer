@@ -1504,15 +1504,48 @@ function switchTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
     
     if (tabName === 'analytics') {
+        if (!analyticsTab || !analyticsTabContent) {
+            console.error('❌ Analytics tab elements not found!');
+            console.error('  - analyticsTab:', analyticsTab);
+            console.error('  - analyticsTabContent:', analyticsTabContent);
+            return;
+        }
         analyticsTab.classList.add('active');
         analyticsTabContent.classList.add('active');
-        displayCurrentView(); // Show the current analytics view
-        updateStats();
+        console.log('✅ Analytics tab activated');
+        console.log('📊 Analytics tab content display:', window.getComputedStyle(analyticsTabContent).display);
+        
+        try {
+            displayCurrentView(); // Show the current analytics view
+            console.log('✅ displayCurrentView() completed');
+        } catch (error) {
+            console.error('❌ Error in displayCurrentView():', error);
+        }
+        
+        try {
+            updateStats();
+            console.log('✅ updateStats() completed');
+        } catch (error) {
+            console.error('❌ Error in updateStats():', error);
+        }
     } else if (tabName === 'highlights') {
+        if (!highlightsTab || !highlightsTabContent) {
+            console.error('❌ Highlights tab elements not found!');
+            console.error('  - highlightsTab:', highlightsTab);
+            console.error('  - highlightsTabContent:', highlightsTabContent);
+            return;
+        }
         highlightsTab.classList.add('active');
         highlightsTabContent.classList.add('active');
+        console.log('✅ Highlights tab activated');
         console.log('🔄 Highlights tab content classes after adding active:', highlightsTabContent.classList.toString());
-        displayCalendar(); // Show the calendar view
+        
+        try {
+            displayCalendar(); // Show the calendar view
+            console.log('✅ displayCalendar() completed');
+        } catch (error) {
+            console.error('❌ Error in displayCalendar():', error);
+        }
     }
 }
 
