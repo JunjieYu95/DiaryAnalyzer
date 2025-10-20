@@ -726,6 +726,53 @@ function getLocalDateKey(date) {
     return `${year}-${month}-${day}`;
 }
 
+// Helper function to divide event duration across days based on absolute timestamps
+function divideEventAcrossDays(event, startDate, endDate) {
+    if (!event.start.dateTime || !event.end.dateTime) {
+        return [];
+    }
+    
+    const eventStart = new Date(event.start.dateTime);
+    const eventEnd = new Date(event.end.dateTime);
+    const calendarKey = getCalendarKey(event.calendarName);
+    
+    // If event is outside our date range, return empty
+    if (eventEnd < startDate || eventStart > endDate) {
+        return [];
+    }
+    
+    const dayAllocations = [];
+    const currentDate = new Date(Math.max(eventStart, startDate));
+    const finalDate = new Date(Math.min(eventEnd, endDate));
+    
+    // Set time to start of day for proper day-by-day calculation
+    currentDate.setHours(0, 0, 0, 0);
+    finalDate.setHours(0, 0, 0, 0);
+    
+    while (currentDate <= finalDate) {
+        const dayStart = new Date(Math.max(eventStart, currentDate));
+        const dayEnd = new Date(Math.min(eventEnd, new Date(currentDate.getTime() + 24 * 60 * 60 * 1000)));
+        
+        // Only include if there's actual time in this day
+        if (dayEnd > dayStart) {
+            const duration = (dayEnd - dayStart) / (1000 * 60); // minutes
+            const dateKey = getLocalDateKey(currentDate);
+            
+            dayAllocations.push({
+                dateKey: dateKey,
+                calendarKey: calendarKey,
+                duration: duration,
+                event: event
+            });
+        }
+        
+        // Move to next day
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return dayAllocations;
+}
+
 // Get date range start based on current selection
 function getDateRangeStart() {
     const date = new Date(currentDate);
@@ -932,22 +979,16 @@ function groupEventsByDate(events, startDate, endDate) {
         currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    // Group events by date and calculate time per calendar type
+    // Group events by date using proper day-by-day allocation
     events.forEach(event => {
-        if (event.start.dateTime && event.end.dateTime) {
-            const eventDate = new Date(event.start.dateTime);
-            const dateKey = getLocalDateKey(eventDate);
-
-            if (eventsByDate[dateKey]) {
-                const start = new Date(event.start.dateTime);
-                const end = new Date(event.end.dateTime);
-                const duration = (end - start) / (1000 * 60); // minutes
-
-                const calendarKey = getCalendarKey(event.calendarName);
-                eventsByDate[dateKey][calendarKey] += duration;
-                eventsByDate[dateKey].total += duration;
+        const dayAllocations = divideEventAcrossDays(event, startDate, endDate);
+        
+        dayAllocations.forEach(allocation => {
+            if (eventsByDate[allocation.dateKey]) {
+                eventsByDate[allocation.dateKey][allocation.calendarKey] += allocation.duration;
+                eventsByDate[allocation.dateKey].total += allocation.duration;
             }
-        }
+        });
     });
 
     return eventsByDate;
@@ -1371,14 +1412,13 @@ function updateStats() {
     // Total events
     totalEventsSpan.textContent = rangeEvents.length;
 
-    // Active hours calculation
+    // Active hours calculation using proper day-by-day allocation
     let totalMinutes = 0;
     rangeEvents.forEach(event => {
-        if (event.start.dateTime && event.end.dateTime) {
-            const start = new Date(event.start.dateTime);
-            const end = new Date(event.end.dateTime);
-            totalMinutes += (end - start) / (1000 * 60);
-        }
+        const dayAllocations = divideEventAcrossDays(event, startDate, endDate);
+        dayAllocations.forEach(allocation => {
+            totalMinutes += allocation.duration;
+        });
     });
 
     const hours = Math.floor(totalMinutes / 60);
@@ -2915,14 +2955,13 @@ function displayRandomDay(selectedDate) {
     
     const timeAgo = getTimeAgo(date);
     
-    // Calculate total time
+    // Calculate total time using proper day-by-day allocation
     let totalMinutes = 0;
     events.forEach(event => {
-        if (event.start.dateTime && event.end.dateTime) {
-            const start = new Date(event.start.dateTime);
-            const end = new Date(event.end.dateTime);
-            totalMinutes += (end - start) / (1000 * 60);
-        }
+        const dayAllocations = divideEventAcrossDays(event, startDate, endDate);
+        dayAllocations.forEach(allocation => {
+            totalMinutes += allocation.duration;
+        });
     });
     
     const totalHours = Math.floor(totalMinutes / 60);
@@ -3319,15 +3358,7 @@ function aggregateDataByPeriod(events, startDate, endDate, period, categories) {
             currentDate.setDate(1);
         }
         
-        // Filter events for this period
-        const periodEvents = events.filter(event => {
-            const eventDate = new Date(event.start.dateTime || event.start.date);
-            return eventDate >= periodStart && eventDate <= periodEnd;
-        });
-        
-        console.log(`📊 Period ${periodLabel}: ${periodEvents.length} events found`);
-        
-        // Calculate totals for each category
+        // Calculate totals for each category using proper day-by-day allocation
         const categoryTotals = {};
         const eventCounts = {};
         
@@ -3336,19 +3367,25 @@ function aggregateDataByPeriod(events, startDate, endDate, period, categories) {
             eventCounts[category] = 0;
         });
         
-        periodEvents.forEach(event => {
+        // Process all events that overlap with this period
+        events.forEach(event => {
             if (event.start.dateTime && event.end.dateTime) {
-                const category = getCalendarKey(event.calendarName);
-                if (categories.includes(category)) {
-                    const start = new Date(event.start.dateTime);
-                    const end = new Date(event.end.dateTime);
-                    const duration = (end - start) / (1000 * 60); // minutes
-                    
-                    categoryTotals[category] += duration;
-                    eventCounts[category] += 1;
-                }
+                const dayAllocations = divideEventAcrossDays(event, periodStart, periodEnd);
+                
+                dayAllocations.forEach(allocation => {
+                    const category = allocation.calendarKey;
+                    if (categories.includes(category)) {
+                        categoryTotals[category] += allocation.duration;
+                        // Count each event only once per period, not per day
+                        if (allocation.dateKey === getLocalDateKey(new Date(event.start.dateTime))) {
+                            eventCounts[category] += 1;
+                        }
+                    }
+                });
             }
         });
+        
+        console.log(`📊 Period ${periodLabel}: category totals calculated using day-by-day allocation`);
         
         console.log(`📊 Period ${periodLabel} category totals:`, categoryTotals);
         
