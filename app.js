@@ -3332,10 +3332,12 @@ function aggregateDataByPeriod(events, startDate, endDate, period, categories) {
             const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
             periodStart = new Date(currentDate);
             periodStart.setDate(currentDate.getDate() + mondayOffset);
+            periodStart.setHours(0, 0, 0, 0);
             
-            // Get end of week (Sunday)
+            // Get end of week (Sunday) - set to end of day to capture all Sunday events
             periodEnd = new Date(periodStart);
             periodEnd.setDate(periodStart.getDate() + 6);
+            periodEnd.setHours(23, 59, 59, 999);
             
             // Format label
             const weekStartStr = periodStart.toLocaleDateString([], { month: 'short', day: 'numeric' });
@@ -3347,7 +3349,9 @@ function aggregateDataByPeriod(events, startDate, endDate, period, categories) {
         } else {
             // Monthly aggregation
             periodStart = new Date(currentDate);
+            periodStart.setHours(0, 0, 0, 0);
             periodEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+            periodEnd.setHours(23, 59, 59, 999);
             if (periodEnd > endDate) periodEnd = endDate;
             
             // Format label
