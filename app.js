@@ -70,8 +70,8 @@ const distributionStats = document.getElementById('distributionStats');
 const aggregatedContainer = document.getElementById('aggregatedContainer');
 const aggregatedChart = document.getElementById('aggregatedChart');
 const aggregationPeriod = document.getElementById('aggregationPeriod');
-const categorySelection = document.getElementById('categorySelection');
 const showEventCount = document.getElementById('showEventCount');
+const refreshCategoryTrendsBtn = document.getElementById('refreshCategoryTrends');
 // Tab elements - will be initialized in DOMContentLoaded
 let analyticsTab;
 let highlightsTab;
@@ -232,6 +232,14 @@ function setupEventListeners() {
         console.log('✅ Aggregation period listener added');
     } else {
         console.error('❌ Aggregation period element not found');
+    }
+    
+    if (refreshCategoryTrendsBtn) {
+        refreshCategoryTrendsBtn.addEventListener('click', () => {
+            console.log('🔄 Refresh category trends button clicked');
+            displayAggregatedView();
+        });
+        console.log('✅ Refresh category trends listener added');
     }
     
     if (showEventCount) {
@@ -3049,25 +3057,33 @@ function displayAggregatedView() {
         // Clear previous content
         aggregatedChart.innerHTML = '';
         
-        // Get the selected date range
-        const startDate = getDateRangeStart();
-        const endDate = getDateRangeEnd();
+        // Use ALL events instead of date-filtered events
+        // This makes the category trends independent of the top period selection
+        const rangeEvents = allEvents;
         
-        // Filter events for the selected range
-        const rangeEvents = allEvents.filter(event => {
-            const eventDate = new Date(event.start.dateTime || event.start.date);
-            return eventDate >= startDate && eventDate <= endDate;
-        });
-        
-        console.log('📊 Range events for aggregated view:', rangeEvents.length);
+        console.log('📊 Total events for aggregated view:', rangeEvents.length);
         
         if (rangeEvents.length === 0) {
-            aggregatedChart.innerHTML = '<div class="no-events">No events found in this date range</div>';
+            aggregatedChart.innerHTML = '<div class="no-events">No events found</div>';
             return;
         }
         
-        // Initialize category selection if not already done
-        initializeCategorySelection(rangeEvents);
+        // Find the min and max dates from all events
+        let minDate = null;
+        let maxDate = null;
+        
+        rangeEvents.forEach(event => {
+            const eventDate = new Date(event.start.dateTime || event.start.date);
+            if (!minDate || eventDate < minDate) minDate = new Date(eventDate);
+            if (!maxDate || eventDate > maxDate) maxDate = new Date(eventDate);
+        });
+        
+        // Set time to start/end of day
+        if (minDate) minDate.setHours(0, 0, 0, 0);
+        if (maxDate) maxDate.setHours(23, 59, 59, 999);
+        
+        const startDate = minDate || new Date();
+        const endDate = maxDate || new Date();
         
         // Create aggregated chart
         createAggregatedChart(rangeEvents, startDate, endDate);
@@ -3080,50 +3096,17 @@ function displayAggregatedView() {
     }
 }
 
-// Initialize category selection checkboxes
-function initializeCategorySelection(events) {
-    if (!categorySelection) return;
-    
-    // Get unique categories from events
+// Get available categories from events
+function getAvailableCategories(events) {
     const categories = new Set();
     events.forEach(event => {
         const category = getCalendarKey(event.calendarName);
         categories.add(category);
     });
     
-    // Clear existing checkboxes
-    categorySelection.innerHTML = '';
-    
-    // Create checkboxes for each category
+    // Return categories in preferred order
     const categoryOrder = ['prod', 'nonprod', 'admin', 'other'];
-    const categoryLabels = {
-        'prod': 'Production Work',
-        'nonprod': 'Non-Production',
-        'admin': 'Admin & Rest',
-        'other': 'Other Activities'
-    };
-    
-    categoryOrder.forEach(category => {
-        if (categories.has(category)) {
-            const checkboxItem = document.createElement('div');
-            checkboxItem.className = 'category-checkbox-item checked';
-            checkboxItem.innerHTML = `
-                <input type="checkbox" id="category-${category}" value="${category}" checked>
-                <label for="category-${category}">${categoryLabels[category]}</label>
-            `;
-            
-            // Add click handler
-            checkboxItem.addEventListener('click', (e) => {
-                e.preventDefault();
-                const checkbox = checkboxItem.querySelector('input[type="checkbox"]');
-                checkbox.checked = !checkbox.checked;
-                checkboxItem.classList.toggle('checked', checkbox.checked);
-                onCategorySelectionChange();
-            });
-            
-            categorySelection.appendChild(checkboxItem);
-        }
-    });
+    return categoryOrder.filter(cat => categories.has(cat));
 }
 
 // Handle aggregation period change
@@ -3138,7 +3121,7 @@ function onEventCountToggleChange() {
     displayAggregatedView();
 }
 
-// Handle category selection change
+// Handle category selection change (kept for compatibility but not used with checkboxes)
 function onCategorySelectionChange() {
     console.log('📊 Category selection changed');
     displayAggregatedView();
@@ -3153,10 +3136,10 @@ function createAggregatedChart(events, startDate, endDate) {
         return;
     }
     
-    // Get selected categories
-    const selectedCategories = getSelectedCategories();
+    // Get all available categories from events
+    const selectedCategories = getSelectedCategories(events);
     if (selectedCategories.length === 0) {
-        aggregatedChart.innerHTML = '<div class="no-events">Please select at least one category to display</div>';
+        aggregatedChart.innerHTML = '<div class="no-events">No categories found</div>';
         return;
     }
     
@@ -3239,6 +3222,16 @@ function createAggregatedChart(events, startDate, endDate) {
                     labels: {
                         usePointStyle: true,
                         padding: 20
+                    },
+                    onClick: function(e, legendItem, legend) {
+                        // Default Chart.js legend click handler - toggles dataset visibility
+                        const index = legendItem.datasetIndex;
+                        const ci = legend.chart;
+                        const meta = ci.getDatasetMeta(index);
+                        
+                        // Toggle visibility
+                        meta.hidden = meta.hidden === null ? !ci.data.datasets[index].hidden : null;
+                        ci.update();
                     }
                 },
                 tooltip: {
@@ -3309,12 +3302,14 @@ function createAggregatedChart(events, startDate, endDate) {
     console.log('✅ Aggregated chart created successfully');
 }
 
-// Get selected categories from checkboxes
-function getSelectedCategories() {
-    if (!categorySelection) return [];
+// Get selected categories - returns all available categories by default
+function getSelectedCategories(events) {
+    if (!events || events.length === 0) {
+        return ['prod', 'nonprod', 'admin', 'other'];
+    }
     
-    const checkboxes = categorySelection.querySelectorAll('input[type="checkbox"]:checked');
-    return Array.from(checkboxes).map(checkbox => checkbox.value);
+    // Get all available categories from events
+    return getAvailableCategories(events);
 }
 
 // Aggregate data by period (weekly or monthly)
