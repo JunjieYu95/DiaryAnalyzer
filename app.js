@@ -2924,7 +2924,7 @@ async function generateRandomRecap() {
         }
         
         // Display the random day
-        displayRandomDay(selectedDate);
+        displayRandomDay(selectedDate, startDate, endDate);
         
     } catch (error) {
         console.error('❌ Error generating random recap:', error);
@@ -2942,7 +2942,7 @@ async function generateRandomRecap() {
     }
 }
 
-function displayRandomDay(selectedDate) {
+function displayRandomDay(selectedDate, startDate, endDate) {
     const resultsDiv = document.getElementById('randomRecapResults');
     const { date, events } = selectedDate;
     
