@@ -3144,7 +3144,7 @@ function createAggregatedChart(events, startDate, endDate) {
     }
     
     // Get aggregation period
-    const period = aggregationPeriod ? aggregationPeriod.value : 'weekly';
+    const period = aggregationPeriod ? aggregationPeriod.value : 'daily';
     const showEventCounts = showEventCount ? showEventCount.checked : false;
     
     // Aggregate data
@@ -3312,7 +3312,7 @@ function getSelectedCategories(events) {
     return getAvailableCategories(events);
 }
 
-// Aggregate data by period (weekly or monthly)
+// Aggregate data by period (daily, weekly or monthly)
 function aggregateDataByPeriod(events, startDate, endDate, period, categories) {
     const aggregatedData = [];
     const currentDate = new Date(startDate);
@@ -3321,7 +3321,19 @@ function aggregateDataByPeriod(events, startDate, endDate, period, categories) {
         let periodStart, periodEnd;
         let periodLabel;
         
-        if (period === 'weekly') {
+        if (period === 'daily') {
+            // Daily aggregation
+            periodStart = new Date(currentDate);
+            periodStart.setHours(0, 0, 0, 0);
+            periodEnd = new Date(currentDate);
+            periodEnd.setHours(23, 59, 59, 999);
+            
+            // Format label
+            periodLabel = currentDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            
+            // Move to next day
+            currentDate.setDate(currentDate.getDate() + 1);
+        } else if (period === 'weekly') {
             // Get start of week (Monday)
             const dayOfWeek = currentDate.getDay();
             const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
