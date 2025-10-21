@@ -8,6 +8,12 @@ let allEvents = [];
 let currentYear = new Date().getFullYear();
 let highlightsData = JSON.parse(localStorage.getItem('highlightsData') || '[]');
 
+// Supabase client - will be initialized after CONFIG is loaded
+let supabaseClient = null;
+
+// Workout data
+let workoutRequests = [];
+
 // Add test highlights for debugging
 function addTestHighlights() {
     const testHighlights = [
@@ -50,6 +56,26 @@ if (typeof CONFIG === 'undefined') {
     throw new Error('CONFIG not loaded. See console for details.');
 }
 
+// Initialize Supabase client
+function initSupabase() {
+    if (typeof supabase !== 'undefined' && CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY) {
+        supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+        console.log('✅ Supabase client initialized');
+        return true;
+    } else {
+        console.warn('⚠️ Supabase not available or not configured');
+        return false;
+    }
+}
+
+// Try to initialize Supabase immediately if SDK is loaded
+if (typeof supabase !== 'undefined') {
+    initSupabase();
+} else {
+    // If not loaded yet, wait for window load
+    window.addEventListener('load', initSupabase);
+}
+
 // DOM elements
 const authSection = document.getElementById('authSection');
 const loadingSection = document.getElementById('loadingSection');
@@ -72,12 +98,20 @@ const aggregatedChart = document.getElementById('aggregatedChart');
 const aggregationPeriod = document.getElementById('aggregationPeriod');
 const showEventCount = document.getElementById('showEventCount');
 const refreshCategoryTrendsBtn = document.getElementById('refreshCategoryTrends');
+// Score graph elements
+const scoreGraphContainer = document.getElementById('scoreGraphContainer');
+const scoreGraphChart = document.getElementById('scoreGraphChart');
+const scoreTimeRange = document.getElementById('scoreTimeRange');
+const refreshScoreGraphBtn = document.getElementById('refreshScoreGraph');
 // Tab elements - will be initialized in DOMContentLoaded
 let analyticsTab;
 let highlightsTab;
 let analyticsTabContent;
 let highlightsTabContent;
 let highlightsLogButton;
+
+// Workout scores data
+let workoutScores = [];
 
 // Calendar elements
 const calendarContainer = document.getElementById('calendarContainer');
@@ -301,6 +335,23 @@ function setupEventListeners() {
         console.log('✅ Next year button listener added');
     } else {
         console.error('❌ Next year button not found');
+    }
+    
+    // Score graph event listeners
+    if (scoreTimeRange) {
+        scoreTimeRange.addEventListener('change', () => {
+            console.log('🔄 Score time range changed');
+            displayScoreGraph();
+        });
+        console.log('✅ Score time range listener added');
+    }
+    
+    if (refreshScoreGraphBtn) {
+        refreshScoreGraphBtn.addEventListener('click', () => {
+            console.log('🔄 Refresh score graph button clicked');
+            displayScoreGraph();
+        });
+        console.log('✅ Refresh score graph listener added');
     }
     
     if (saveHighlightBtn) {
@@ -1616,6 +1667,7 @@ function displayCurrentView() {
     distributionContainer.classList.add('hidden');
     document.getElementById('advancedContainer').classList.add('hidden');
     aggregatedContainer.classList.add('hidden');
+    if (scoreGraphContainer) scoreGraphContainer.classList.add('hidden');
 
     if (selectedView === 'timeline') {
         timelineContainer.classList.remove('hidden');
@@ -1628,6 +1680,11 @@ function displayCurrentView() {
         displayAdvancedAnalytics();
     } else if (selectedView === 'aggregated') {
         aggregatedContainer.classList.remove('hidden');
+    } else if (selectedView === 'scoreGraph') {
+        if (scoreGraphContainer) {
+            scoreGraphContainer.classList.remove('hidden');
+            displayScoreGraph();
+        }
     }
 }
 
@@ -3421,11 +3478,15 @@ function getCategoryDisplayName(category) {
 }
 
 // Calendar View Functions
-function displayCalendar() {
+async function displayCalendar() {
     console.log('📅 Displaying calendar view for year:', currentYear);
     console.log('📅 Calendar container element:', calendarContainer);
     console.log('📅 Calendar grid element:', calendarGrid);
     updateCurrentYearDisplay();
+    
+    // Fetch workout requests before generating calendar
+    await fetchWorkoutRequests();
+    
     addTestHighlights(); // Add test highlights for debugging
     generateCalendarGrid();
 }
@@ -3436,9 +3497,13 @@ function updateCurrentYearDisplay() {
     }
 }
 
-function navigateYear(direction) {
+async function navigateYear(direction) {
     currentYear += direction;
     updateCurrentYearDisplay();
+    
+    // Fetch workout requests for the new year
+    await fetchWorkoutRequests();
+    
     generateCalendarGrid();
 }
 
@@ -3565,10 +3630,13 @@ function createCalendarDay(year, month, day) {
     if (isToday) dayElement.classList.add('today');
     if (isOtherMonth) dayElement.classList.add('other-month');
     
-    // Check for highlights only (no daily logger events in highlights tab)
+    // Check for workout requests (approved only)
+    const dayWorkouts = getWorkoutRequestsForDate(date);
     const dayHighlights = getHighlightsForDate(date);
     
-    if (dayHighlights.length > 0) dayElement.classList.add('has-highlights');
+    if (dayWorkouts.length > 0 || dayHighlights.length > 0) {
+        dayElement.classList.add('has-highlights');
+    }
     
     // Create day content
     const dayNumber = document.createElement('div');
@@ -3578,7 +3646,15 @@ function createCalendarDay(year, month, day) {
     const indicators = document.createElement('div');
     indicators.className = 'day-indicators';
     
-    // Add highlight indicators only (no daily logger events in highlights tab)
+    // Add workout indicators
+    dayWorkouts.forEach(workout => {
+        const indicator = document.createElement('div');
+        indicator.className = 'day-indicator workout';
+        indicator.title = 'Workout completed';
+        indicators.appendChild(indicator);
+    });
+    
+    // Add highlight indicators
     dayHighlights.forEach(highlight => {
         const indicator = document.createElement('div');
         indicator.className = `day-indicator ${highlight.type}`;
@@ -3588,8 +3664,8 @@ function createCalendarDay(year, month, day) {
     dayElement.appendChild(dayNumber);
     dayElement.appendChild(indicators);
     
-    // Add click event (only highlights, no daily logger events in highlights tab)
-    dayElement.addEventListener('click', () => showDayDetails(date, [], dayHighlights));
+    // Add click event with both workouts and highlights
+    dayElement.addEventListener('click', () => showDayDetails(date, [], dayHighlights, dayWorkouts));
     
     return dayElement;
 }
@@ -3615,7 +3691,53 @@ function getHighlightsForDate(date) {
     return highlights;
 }
 
-function showDayDetails(date, events, highlights) {
+// Fetch workout requests from Supabase
+async function fetchWorkoutRequests() {
+    if (!supabaseClient) {
+        console.error('❌ Supabase client not initialized');
+        return [];
+    }
+    
+    try {
+        console.log('📊 Fetching workout requests...');
+        const { data, error } = await supabaseClient
+            .from('workout_requests')
+            .select('*')
+            .eq('status', 'approved')
+            .order('recorded_at', { ascending: false });
+        
+        if (error) {
+            console.error('❌ Error fetching workout requests:', error);
+            return [];
+        }
+        
+        console.log(`✅ Fetched ${data.length} approved workout requests`);
+        workoutRequests = data;
+        return data;
+    } catch (error) {
+        console.error('❌ Exception fetching workout requests:', error);
+        return [];
+    }
+}
+
+// Get workout requests for a specific date (with timezone conversion)
+function getWorkoutRequestsForDate(date) {
+    // Convert the date to local timezone string (YYYY-MM-DD)
+    const localDateStr = date.toLocaleDateString('en-CA'); // en-CA gives YYYY-MM-DD format
+    
+    // Filter workout requests where the recorded_at matches the local date
+    const requests = workoutRequests.filter(request => {
+        // Convert the UTC timestamp to local date
+        const recordedDate = new Date(request.recorded_at);
+        const recordedLocalDateStr = recordedDate.toLocaleDateString('en-CA');
+        return recordedLocalDateStr === localDateStr;
+    });
+    
+    console.log(`📅 Found ${requests.length} workout requests for ${localDateStr}`);
+    return requests;
+}
+
+function showDayDetails(date, events, highlights, workouts = []) {
     console.log('📅 Showing details for:', date.toDateString());
     
     if (dayDetailsTitle) {
@@ -3631,30 +3753,31 @@ function showDayDetails(date, events, highlights) {
         });
     }
     
-    // Display events
+    // Display workout requests
     if (dayDetailsEvents) {
-        dayDetailsEvents.innerHTML = '<h3>Calendar Events</h3>';
+        dayDetailsEvents.innerHTML = '<h3>Workout Sessions</h3>';
         
-        if (events.length === 0) {
-            dayDetailsEvents.innerHTML += '<div class="no-events">No events scheduled for this day</div>';
+        if (workouts.length === 0) {
+            dayDetailsEvents.innerHTML += '<div class="no-events">No workouts for this day</div>';
         } else {
-            events.forEach(event => {
-                const eventElement = document.createElement('div');
-                eventElement.className = 'day-details-event';
+            workouts.forEach(workout => {
+                const workoutElement = document.createElement('div');
+                workoutElement.className = 'day-details-event';
                 
-                const time = event.start.dateTime ? 
-                    new Date(event.start.dateTime).toLocaleTimeString('en-US', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                    }) : 'All day';
+                // Convert UTC timestamp to local time
+                const recordedDate = new Date(workout.recorded_at);
+                const time = recordedDate.toLocaleTimeString('en-US', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
                 
-                eventElement.innerHTML = `
+                workoutElement.innerHTML = `
                     <div class="day-details-event-time">${time}</div>
-                    <div class="day-details-event-title">${event.summary || 'No title'}</div>
-                    <div class="day-details-event-description">${event.description || ''}</div>
+                    <div class="day-details-event-title">Workout Session</div>
+                    <div class="day-details-event-description">${workout.note || 'No notes'}</div>
                 `;
                 
-                dayDetailsEvents.appendChild(eventElement);
+                dayDetailsEvents.appendChild(workoutElement);
             });
         }
     }
@@ -3877,6 +4000,149 @@ async function saveHighlight(highlightData) {
         
         console.log('💾 Highlight saved locally:', highlight);
     }
+}
+
+// Fetch workout scores from Supabase
+async function fetchWorkoutScores(days = 30) {
+    if (!supabaseClient) {
+        console.error('❌ Supabase client not initialized');
+        return [];
+    }
+    
+    try {
+        console.log(`📊 Fetching workout scores for last ${days} days...`);
+        
+        // Calculate the start date
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+        
+        const { data, error } = await supabaseClient
+            .from('workout_scores')
+            .select('*')
+            .gte('recorded_at', startDate.toISOString())
+            .order('recorded_at', { ascending: true });
+        
+        if (error) {
+            console.error('❌ Error fetching workout scores:', error);
+            return [];
+        }
+        
+        console.log(`✅ Fetched ${data.length} workout scores`);
+        workoutScores = data;
+        return data;
+    } catch (error) {
+        console.error('❌ Exception fetching workout scores:', error);
+        return [];
+    }
+}
+
+// Display score graph
+async function displayScoreGraph() {
+    console.log('📊 Displaying score graph...');
+    
+    if (!scoreGraphChart) {
+        console.error('❌ Score graph chart container not found');
+        return;
+    }
+    
+    // Get selected time range
+    const days = scoreTimeRange ? parseInt(scoreTimeRange.value) : 30;
+    
+    // Fetch scores
+    const scores = await fetchWorkoutScores(days);
+    
+    if (scores.length === 0) {
+        scoreGraphChart.innerHTML = '<div class="no-data-message">No score data available for the selected time range.</div>';
+        return;
+    }
+    
+    // Group scores by user and prepare data for Chart.js
+    const userScores = {};
+    const partnerScores = {};
+    
+    scores.forEach(score => {
+        const date = new Date(score.recorded_at).toLocaleDateString('en-CA'); // YYYY-MM-DD format
+        
+        // For now, we'll use a simple approach - you may need to identify which user is which
+        // This assumes you have a way to distinguish between user and partner
+        if (!userScores[date]) {
+            userScores[date] = [];
+        }
+        userScores[date].push(score.score);
+    });
+    
+    // Create date labels and average scores
+    const dates = Object.keys(userScores).sort();
+    const avgScores = dates.map(date => {
+        const dayScores = userScores[date];
+        return dayScores.reduce((sum, s) => sum + parseFloat(s), 0) / dayScores.length;
+    });
+    
+    // Clear previous chart
+    scoreGraphChart.innerHTML = '<canvas id="scoreChart"></canvas>';
+    const canvas = document.getElementById('scoreChart');
+    
+    // Create the chart
+    new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: dates.map(d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+            datasets: [{
+                label: 'Your Score',
+                data: avgScores,
+                borderColor: '#4CAF50',
+                backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                borderWidth: 2,
+                tension: 0.4,
+                fill: true,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                title: {
+                    display: true,
+                    text: 'Workout Score Over Time'
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(2);
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Date'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Score'
+                    },
+                    beginAtZero: true
+                }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            }
+        }
+    });
 }
 
 // Make functions globally available

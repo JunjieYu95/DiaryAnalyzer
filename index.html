@@ -32,6 +32,9 @@
     <!-- Stylesheet -->
     <link rel="stylesheet" href="styles.css">
     
+    <!-- Load Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
     <!-- Load Google API Client Library for proper OAuth -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -123,6 +126,7 @@
                             <option value="timeline">Timeline</option>
                             <option value="advanced">Advanced Analytics</option>
                             <option value="aggregated">Category Trends</option>
+                            <option value="scoreGraph">Score Graph</option>
                         </select>
                         <button id="logButton" class="log-btn">📝 Quick Log</button>
                         <button id="randomRecapBtn" class="random-recap-btn">🎲 Random Recap</button>
@@ -192,6 +196,30 @@
                         </div>
                     </div>
                     <div id="aggregatedChart" class="aggregated-chart">
+                        <!-- Chart will be dynamically inserted here -->
+                    </div>
+                </div>
+
+                <!-- Score Graph View -->
+                <div id="scoreGraphContainer" class="score-graph-container hidden">
+                    <h3>📊 Score Tracking</h3>
+                    <p class="score-graph-subtitle">Track your workout scores over time</p>
+                    <div class="score-graph-controls">
+                        <div class="control-group">
+                            <label for="scoreTimeRange">Time Range:</label>
+                            <select id="scoreTimeRange" class="period-selector">
+                                <option value="7">Last 7 Days</option>
+                                <option value="30" selected>Last 30 Days</option>
+                                <option value="90">Last 90 Days</option>
+                                <option value="180">Last 6 Months</option>
+                                <option value="365">Last Year</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <button id="refreshScoreGraph" class="refresh-category-btn">🔄 Refresh</button>
+                        </div>
+                    </div>
+                    <div id="scoreGraphChart" class="score-graph-chart">
                         <!-- Chart will be dynamically inserted here -->
                     </div>
                 </div>
