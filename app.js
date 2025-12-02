@@ -361,43 +361,22 @@ function setupEventListeners() {
 
 // Check authentication status
 async function checkAuthStatus() {
-    console.log('🔍 Checking authentication status...');
+    console.log('🔍 Checking secure authentication status...');
+    
+    if (typeof window.fetchSessionAccessToken !== 'function') {
+        console.warn('⚠️ Secure auth helper not ready yet, showing auth section');
+        showSection('auth');
+        return;
+    }
+    
     try {
-        const storedToken = localStorage.getItem('googleToken');
-        console.log('💾 Stored token exists:', !!storedToken);
-        console.log('💾 Stored token length:', storedToken ? storedToken.length : 0);
-
-        // FORCE RE-SIGNIN FOR TESTING - Set to false for production to persist login
-        const forceReSignin = false; // Set to true only for testing/debugging
-        
-        if (storedToken && !forceReSignin) {
-            console.log('✅ Found stored token, checking validity...');
-            accessToken = storedToken;
-            showSection('loading');
-            
-            try {
-                await loadCalendarData();
-                console.log('✅ Stored token is valid, user signed in automatically');
-                showSignOutButton();
-            } catch (error) {
-                console.log('❌ Stored token is invalid/expired, clearing and showing auth');
-                localStorage.removeItem('googleToken');
-                window.globalAccessToken = null;
-                window.accessToken = null;
-                showSection('auth');
-                hideSignOutButton();
-            }
+        const sessionData = await window.fetchSessionAccessToken('app-init');
+        if (sessionData && sessionData.accessToken) {
+            console.log('✅ Secure session token available, loading data...');
+            await processAuthenticatedSession('session-resume');
         } else {
-            if (forceReSignin) {
-                console.log('🔄 Force re-signin enabled for testing - clearing stored token');
-                localStorage.removeItem('googleToken');
-                window.globalAccessToken = null;
-                window.accessToken = null;
-            }
-            console.log('🔍 No stored token found, showing auth section');
+            console.log('ℹ️ No active secure session, prompting user to sign in');
             showSection('auth');
-            
-            // Add debug info for Google Sign-In setup
             setTimeout(() => {
                 debugGoogleSignInSetup();
             }, 1000);
@@ -408,6 +387,26 @@ async function checkAuthStatus() {
         showSection('auth');
     }
 }
+
+async function processAuthenticatedSession(source = 'unknown') {
+    console.log(`🚀 Processing authenticated session (${source})...`);
+    window.authCompleted = true;
+    try {
+        showSection('loading');
+        if (typeof updateLoadingMessage === 'function') {
+            updateLoadingMessage('Loading calendar data...', 'Fetching events from Google Calendar...');
+        }
+        await loadCalendarData();
+        console.log('✅ Calendar data loaded successfully via secure session');
+        showSignOutButton();
+    } catch (error) {
+        console.error('❌ Error loading calendar data after auth:', error);
+        showError(error.message || 'Failed to load calendar data');
+        throw error;
+    }
+}
+
+window.processAuthenticatedSession = processAuthenticatedSession;
 
 // Debug function to check Google Sign-In setup
 function debugGoogleSignInSetup() {
@@ -457,9 +456,10 @@ window.debugAuth = function() {
     console.log('🔧 === ADDITIONAL CHECKS ===');
     console.log('🌐 Window.location:', window.location.href);
     console.log('🔑 CONFIG object:', CONFIG);
-    console.log('📱 Local storage:', {
-        googleToken: localStorage.getItem('googleToken') ? 'EXISTS' : 'NOT_FOUND',
-        length: localStorage.getItem('googleToken')?.length || 0
+    console.log('📱 Session state:', {
+        highlightsCount: highlightsData.length,
+        hasAccessToken: !!window.accessToken,
+        secureSessionHelper: typeof window.fetchSessionAccessToken
     });
     
     // Check if Google Sign-In button is clickable
@@ -2702,18 +2702,23 @@ async function createCalendarEvent(eventData) {
 function signOut() {
     console.log('🚪 Signing out...');
     
-    // Clear stored tokens
-    localStorage.removeItem('googleToken');
-    window.globalAccessToken = null;
-    window.accessToken = null;
+    const performSignOut = async () => {
+        if (typeof window.invalidateSecureSession === 'function') {
+            try {
+                await window.invalidateSecureSession();
+            } catch (error) {
+                console.warn('⚠️ Failed to invalidate secure session:', error);
+            }
+        }
+    };
     
-    // Hide sign out button
-    hideSignOutButton();
-    
-    // Show auth section
-    showSection('auth');
-    
-    console.log('✅ Signed out successfully');
+    performSignOut().finally(() => {
+        window.globalAccessToken = null;
+        window.accessToken = null;
+        hideSignOutButton();
+        showSection('auth');
+        console.log('✅ Signed out successfully');
+    });
 }
 
 // Show sign out button

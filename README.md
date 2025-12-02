@@ -57,11 +57,28 @@ Diary Analyzer is a web application that connects to your Google Calendar and pr
    ```javascript
    const CONFIG = {
        GOOGLE_CLIENT_ID: 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com',
+       API_BASE_URL: 'http://localhost:8787', // match backend server
        // ... other settings
    };
    ```
 
-### 3. Run Locally
+### 3. Secure Auth Server
+
+1. Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+2. Fill in:
+   - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from Google Cloud Console
+   - `FRONTEND_ORIGIN` (defaults to `http://localhost:8000`)
+   - `SESSION_SECRET` (generate a long random string)
+3. Start the backend service:
+   ```bash
+   npm run start:backend
+   ```
+   The service listens on port `8787` by default and must be reachable from the browser.
+
+### 4. Run Locally
 
 Using the provided script (recommended):
 ```bash
@@ -82,49 +99,50 @@ Then open: http://localhost:8000
 
 ## 🏗️ Architecture
 
-### Frontend-Only Design
+### Secure SPA + Auth Service
 
-This is a **frontend-only** web application that uses:
-- **Google OAuth 2.0 Token Client** for authentication
-- **Direct Google Calendar API calls** via fetch
-- **Client-side rendering** with vanilla JavaScript
-- **No backend required** for basic functionality
+Diary Analyzer now ships as a static SPA **plus** a lightweight Node/Express auth service that:
+- Uses Google Identity Services Authorization Code Flow with refresh tokens
+- Stores refresh tokens server-side and issues short-lived access tokens to the browser via HTTP-only cookies
+- Allows the frontend to call the Google Calendar API directly with tokens that can be refreshed silently
 
 ### Key Components
 
 ```
 DairyAnalyzer/
-├── index.html          # Main HTML entry point
+├── index.html          # Main HTML entry point + OAuth glue
 ├── app.js              # Core application logic
 ├── styles.css          # Styling and layout
-├── config.js           # Configuration (create from config.example.js)
+├── config.js           # Frontend configuration (create from config.example.js)
+├── backend/server.js   # Secure auth + token exchange service
+├── .env.example        # Backend environment template
 ├── chart.js            # Chart.js library for visualizations
 └── start-frontend.sh   # Quick start script
 ```
 
 ### Data Flow
 
-1. **Authentication**: OAuth 2.0 flow requests access token from Google
-2. **Authorization**: Access token grants permission to read calendar data
-3. **Data Fetching**: Direct API calls to Google Calendar v3 API
-4. **Processing**: Client-side categorization and aggregation
-5. **Visualization**: Chart.js renders interactive charts
+1. **Authentication**: Browser requests an authorization code (GIS Code Client)
+2. **Secure Exchange**: Backend exchanges the code for access + refresh tokens and stores the refresh token
+3. **Session Tokens**: Backend issues short-lived access tokens via HTTP-only cookie-backed sessions
+4. **Data Fetching**: Frontend fetches Google Calendar data directly with the issued access token
+5. **Processing & Visualization**: Client-side aggregation + Chart.js visualizations
 
 ## 🔒 Security
 
 ### What's Secure ✅
 
-- **OAuth 2.0 Flow**: Industry-standard authentication
-- **Access Tokens**: Properly scoped (calendar.readonly only)
-- **No Backend**: No server-side storage of credentials
-- **Client-Side Only**: All processing happens in your browser
+- **OAuth 2.0 Code Flow + PKCE**: Authorization codes exchanged on the backend only
+- **Refresh Tokens**: Stored server-side inside the auth service, never exposed to the browser
+- **Access Tokens**: Short-lived tokens scoped to Calendar access and delivered via HTTP-only cookies
+- **Client-Side Analytics**: All calendar processing/visualization still happens in your browser
 
 ### Important Security Notes ⚠️
 
 1. **Client ID is Public**: The Google Client ID in `config.js` is meant to be public - it's not a secret
-2. **Access Tokens in Browser**: Tokens are stored in `localStorage` - this is standard for SPAs
-3. **Read-Only Access**: App only requests `calendar.readonly` scope
-4. **Token Expiration**: Access tokens expire after 1 hour
+2. **Backend Secrets**: Keep `GOOGLE_CLIENT_SECRET` and `SESSION_SECRET` in `.env` (never commit them)
+3. **Scope Control**: App requests read + write scopes only when you use features (events/highlights) that need them
+4. **Token Expiration**: Access tokens expire after ~1 hour and are refreshed silently by the backend
 
 ### For Production Deployment
 
@@ -134,14 +152,19 @@ When deploying to production:
    - Authorized JavaScript origins: `https://yourdomain.com`
    - Authorized redirect URIs: `https://yourdomain.com`, `https://yourdomain.com/auth/callback`
 
-2. **Use Environment Variables** (recommended):
+2. **Deploy the Secure Auth Service**:
+   - Host `backend/server.js` on your preferred platform (Render, Fly.io, Vercel serverless, etc.)
+   - Set `FRONTEND_ORIGIN` to your production domain
+   - Update `CONFIG.API_BASE_URL` to the deployed backend URL
+
+3. **Use Environment Variables** (recommended):
    ```javascript
    const CONFIG = {
        GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || 'fallback-client-id'
    };
    ```
 
-3. **Enable HTTPS**: Always use HTTPS in production
+4. **Enable HTTPS**: Always use HTTPS in production
 
 ## 📱 Deployment
 
@@ -219,11 +242,7 @@ Customize Chart.js options in `app.js`:
 
 **Solution**:
 1. Check Google Cloud Console has correct origins/redirect URIs
-2. Clear `localStorage` and sign in again:
-   ```javascript
-   localStorage.clear();
-   location.reload();
-   ```
+2. Clear your secure session cookies (Sign out, then reload the page)
 
 ### Button Not Appearing
 

@@ -16,8 +16,13 @@ const CONFIG = {
     
     // Calendar settings
     CALENDAR_SCOPES: [
-        'https://www.googleapis.com/auth/calendar.readonly'
+        'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/calendar'
     ],
+    
+    API_BASE_URL: 'http://localhost:8787',
+    SESSION_REFRESH_BUFFER_SECONDS: 60,
     
     // Default settings
     DEFAULT_DATE_RANGE: 'today',
