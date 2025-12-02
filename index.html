@@ -301,12 +301,22 @@
     <!-- config.js must load BEFORE app.js, so no defer -->
     <script src="config.js"></script>
     
-    <!-- Google OAuth Setup - REQUEST ACCESS TOKEN NOT ID TOKEN -->
+    <!-- Secure Google OAuth setup using Authorization Code Flow -->
     <script>
-        let tokenClient;
-        // Note: accessToken is declared in app.js, we'll just use window.accessToken
+        const AUTH_SCOPES = Array.isArray(CONFIG.CALENDAR_SCOPES) && CONFIG.CALENDAR_SCOPES.length
+            ? CONFIG.CALENDAR_SCOPES.join(' ')
+            : 'https://www.googleapis.com/auth/calendar.readonly';
+        const DEFAULT_API_BASE =
+            window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                ? 'http://localhost:8787'
+                : window.location.origin;
+        const API_BASE_URL = CONFIG.API_BASE_URL || DEFAULT_API_BASE;
+        const SESSION_BUFFER_SECONDS = CONFIG.SESSION_REFRESH_BUFFER_SECONDS || 60;
+        const OFFLINE_ACCESS_KEY = 'diary-analyzer-offline-access';
         
-        // Helper function to update loading message with details
+        let codeClient;
+        let silentRefreshTimer = null;
+        
         function updateLoadingMessage(mainMessage, details = '') {
             const loadingMsg = document.getElementById('loadingMessage');
             const loadingDetails = document.getElementById('loadingDetails');
@@ -315,90 +325,137 @@
             console.log('📢', mainMessage, details ? `(${details})` : '');
         }
         
-        // Wait for Google API to load completely
-        function initializeGoogleAuth() {
-            console.log('🔧 Initializing Google OAuth...');
+        function showAuthUI() {
+            document.getElementById('authSection')?.classList.remove('hidden');
+            document.getElementById('loadingSection')?.classList.add('hidden');
+            document.getElementById('errorSection')?.classList.add('hidden');
+        }
+        
+        function showLoadingUI(details = '') {
+            document.getElementById('authSection')?.classList.add('hidden');
+            document.getElementById('errorSection')?.classList.add('hidden');
+            document.getElementById('loadingSection')?.classList.remove('hidden');
+            updateLoadingMessage('Securing your session...', details);
+        }
+        
+        function setAccessToken(token) {
+            window.accessToken = token;
+            window.globalAccessToken = token;
+        }
+        
+        function scheduleSilentRefresh(expiresInSeconds) {
+            clearTimeout(silentRefreshTimer);
+            if (!expiresInSeconds) return;
             
-            // Check if google object exists
-            if (typeof google === 'undefined') {
-                console.log('⏳ Google API not loaded yet, retrying...');
-                setTimeout(initializeGoogleAuth, 100);
+            const delay = Math.max((expiresInSeconds - SESSION_BUFFER_SECONDS) * 1000, 30_000);
+            silentRefreshTimer = setTimeout(() => {
+                console.log('🔄 Performing silent session refresh...');
+                fetchSessionAccessToken('silent-refresh');
+            }, delay);
+        }
+        
+        async function fetchSessionAccessToken(reason = 'manual') {
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/session`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Session endpoint returned ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log(`✅ Retrieved session access token (${reason})`);
+                setAccessToken(data.accessToken);
+                scheduleSilentRefresh(data.expiresIn);
+                return data;
+            } catch (error) {
+                console.log(`ℹ️ No reusable session (${reason}):`, error.message || error);
+                return null;
+            }
+        }
+        
+        async function exchangeCodeForSession(authCode) {
+            showLoadingUI('Finishing secure sign-in...');
+            const response = await fetch(`${API_BASE_URL}/auth/exchange`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ code: authCode })
+            });
+            
+            if (!response.ok) {
+                const errorPayload = await response.json().catch(() => ({}));
+                throw new Error(errorPayload.error || 'Failed to exchange authorization code');
+            }
+            
+            const data = await response.json();
+            setAccessToken(data.accessToken);
+            scheduleSilentRefresh(data.expiresIn);
+            
+            if (data.refreshTokenStored) {
+                sessionStorage.setItem(OFFLINE_ACCESS_KEY, 'true');
+            }
+            
+            return data;
+        }
+        
+        function callWhenAppReady(callback, attempt = 0) {
+            if (window.processAuthenticatedSession && typeof window.processAuthenticatedSession === 'function') {
+                callback();
                 return;
             }
             
-            console.log('✅ Google API loaded, setting up OAuth...');
+            if (attempt > 20) {
+                console.error('❌ app.js never finished loading');
+                document.getElementById('errorMessage').textContent = 'Failed to load application logic. Please refresh the page.';
+                document.getElementById('loadingSection')?.classList.add('hidden');
+                document.getElementById('errorSection')?.classList.remove('hidden');
+                return;
+            }
             
-            // Initialize the Token Client for OAuth 2.0
-            // Client ID comes from config.js - never hardcode credentials
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CONFIG.GOOGLE_CLIENT_ID,
-                scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar',
-                callback: (response) => {
-                    console.log('🔐 OAuth Token Response:', response);
-                    
-                    if (response.error) {
-                        console.error('❌ OAuth Error:', response.error);
-                        document.getElementById('errorMessage').textContent = `Authentication failed: ${response.error}`;
-                        document.getElementById('authSection').classList.add('hidden');
-                        document.getElementById('errorSection').classList.remove('hidden');
-                        return;
+            setTimeout(() => callWhenAppReady(callback, attempt + 1), 250);
+        }
+        
+        function handleAuthenticatedState(source) {
+            updateLoadingMessage('Authentication successful!', 'Loading calendar data...');
+            callWhenAppReady(() => {
+                try {
+                    const result = window.processAuthenticatedSession(source);
+                    if (result && typeof result.then === 'function') {
+                        result.catch((error) => {
+                            console.error('❌ Failed while loading calendar data:', error);
+                            document.getElementById('errorMessage').textContent = error.message || 'Failed to load calendar data.';
+                            document.getElementById('loadingSection')?.classList.add('hidden');
+                            document.getElementById('errorSection')?.classList.remove('hidden');
+                        });
                     }
-                    
-                    if (response.access_token) {
-                        console.log('✅ Got ACCESS TOKEN (length:', response.access_token.length, ')');
-                        console.log('🔑 Token preview:', response.access_token.substring(0, 30) + '...');
-                        
-                        // THIS IS A REAL ACCESS TOKEN - IT WORKS WITH APIs!
-                        window.accessToken = response.access_token;
-                        window.globalAccessToken = response.access_token;
-                        
-                        // Store token
-                        localStorage.setItem('googleToken', response.access_token);
-                        console.log('💾 Access token stored');
-                        
-                        // Show loading and load data
-                        document.getElementById('authSection').classList.add('hidden');
-                        document.getElementById('loadingSection').classList.remove('hidden');
-                        updateLoadingMessage('Authentication successful!', 'Initializing calendar API...');
-                        
-                        // Load calendar data with retry logic
-                        const tryLoadCalendarData = (attempts = 0, maxAttempts = 10) => {
-                            console.log(`🔄 Attempt ${attempts + 1}/${maxAttempts} to load calendar data...`);
-                            
-                            if (window.loadCalendarData && typeof window.loadCalendarData === 'function') {
-                                console.log('✅ Found loadCalendarData function, calling it...');
-                                updateLoadingMessage('Loading calendar data...', 'Fetching events from Google Calendar...');
-                                try {
-                                    window.loadCalendarData();
-                                } catch (error) {
-                                    console.error('❌ Error calling loadCalendarData:', error);
-                                    document.getElementById('errorMessage').textContent = `Failed to load calendar data: ${error.message}`;
-                                    document.getElementById('loadingSection').classList.add('hidden');
-                                    document.getElementById('errorSection').classList.remove('hidden');
-                                }
-                            } else if (attempts < maxAttempts) {
-                                const nextAttempt = attempts + 1;
-                                const waitTime = 500;
-                                console.log(`⏳ loadCalendarData not ready yet, retrying in ${waitTime}ms... (${nextAttempt}/${maxAttempts})`);
-                                updateLoadingMessage('Loading calendar data...', `Waiting for app.js... (${nextAttempt}/${maxAttempts})`);
-                                setTimeout(() => tryLoadCalendarData(nextAttempt, maxAttempts), waitTime);
-                            } else {
-                                console.error('❌ Failed to load app.js after', maxAttempts, 'attempts');
-                                document.getElementById('errorMessage').textContent = 'Failed to load app.js. Please refresh the page.';
-                                document.getElementById('loadingSection').classList.add('hidden');
-                                document.getElementById('errorSection').classList.remove('hidden');
-                            }
-                        };
-                        
-                        tryLoadCalendarData();
-                    }
-                },
+                } catch (error) {
+                    console.error('❌ processAuthenticatedSession threw synchronously:', error);
+                    document.getElementById('errorMessage').textContent = error.message || 'Failed to load calendar data.';
+                    document.getElementById('loadingSection')?.classList.add('hidden');
+                    document.getElementById('errorSection')?.classList.remove('hidden');
+                }
             });
-            
+        }
+        
+        async function resumeSessionFlow(reason) {
+            const sessionData = await fetchSessionAccessToken(reason);
+            if (sessionData && sessionData.accessToken) {
+                showLoadingUI('Restoring your previous session...');
+                handleAuthenticatedState('session-resume');
+                return true;
+            }
+            showAuthUI();
+            return false;
+        }
+        
+        function renderSignInButton() {
             console.log('🎨 Rendering sign-in button...');
-            
-            // Create a custom button (Google's renderButton only works with ID tokens)
-            const buttonDiv = document.getElementById("buttonDiv");
+            const buttonDiv = document.getElementById('buttonDiv');
             buttonDiv.innerHTML = `
                 <button id="customGoogleBtn" style="
                     display: flex;
@@ -428,63 +485,84 @@
                 </button>
             `;
             
-            document.getElementById("customGoogleBtn").addEventListener('click', () => {
-                console.log('🖱️ Sign-in button clicked - requesting access token...');
-                // Request an access token
-                tokenClient.requestAccessToken({prompt: ''});
+            document.getElementById('customGoogleBtn').addEventListener('click', () => {
+                if (!codeClient) {
+                    console.error('Google OAuth client not ready yet');
+                    return;
+                }
+                
+                console.log('🖱️ Sign-in button clicked - requesting authorization code...');
+                const offlineGranted = sessionStorage.getItem(OFFLINE_ACCESS_KEY);
+                codeClient.requestCode({
+                    prompt: offlineGranted ? '' : 'consent'
+                });
             });
             
             console.log('✅ Sign-in button rendered successfully');
-            
-            // Check if we already have a token
-            const storedToken = localStorage.getItem('googleToken');
-            if (storedToken && storedToken.length < 500) { // Access tokens are shorter than JWTs
-                console.log('♻️ Found stored access token, attempting to use it...');
-                window.accessToken = storedToken;
-                window.globalAccessToken = storedToken;
-                
-                // Try loading data
-                document.getElementById('authSection').classList.add('hidden');
-                document.getElementById('loadingSection').classList.remove('hidden');
-                updateLoadingMessage('Using stored credentials...', 'Initializing...');
-                
-                // Use the same retry logic
-                const tryLoadCalendarData = (attempts = 0, maxAttempts = 10) => {
-                    console.log(`🔄 Attempt ${attempts + 1}/${maxAttempts} to load calendar data...`);
-                    
-                    if (window.loadCalendarData && typeof window.loadCalendarData === 'function') {
-                        console.log('✅ Found loadCalendarData function, calling it...');
-                        updateLoadingMessage('Loading calendar data...', 'Fetching events from Google Calendar...');
-                        try {
-                            window.loadCalendarData();
-                        } catch (error) {
-                            console.error('❌ Error calling loadCalendarData:', error);
-                            document.getElementById('errorMessage').textContent = `Failed to load calendar data: ${error.message}`;
-                            document.getElementById('loadingSection').classList.add('hidden');
-                            document.getElementById('errorSection').classList.remove('hidden');
-                        }
-                    } else if (attempts < maxAttempts) {
-                        const nextAttempt = attempts + 1;
-                        const waitTime = 500;
-                        console.log(`⏳ loadCalendarData not ready yet, retrying in ${waitTime}ms... (${nextAttempt}/${maxAttempts})`);
-                        updateLoadingMessage('Loading calendar data...', `Waiting for app.js... (${nextAttempt}/${maxAttempts})`);
-                        setTimeout(() => tryLoadCalendarData(nextAttempt, maxAttempts), waitTime);
-                    } else {
-                        console.error('❌ Failed to load app.js after', maxAttempts, 'attempts');
-                        document.getElementById('errorMessage').textContent = 'Failed to load app.js. Please refresh the page.';
-                        document.getElementById('loadingSection').classList.add('hidden');
-                        document.getElementById('errorSection').classList.remove('hidden');
-                    }
-                };
-                
-                tryLoadCalendarData();
-            }
         }
         
-        // Start initialization when page loads
-        window.onload = initializeGoogleAuth;
+        function initializeGoogleAuth() {
+            if (typeof google === 'undefined' || !google.accounts?.oauth2) {
+                console.log('⏳ Google API not loaded yet, retrying...');
+                setTimeout(initializeGoogleAuth, 100);
+                return;
+            }
+            
+            console.log('🔧 Initializing Google OAuth (Authorization Code Flow)...');
+            codeClient = google.accounts.oauth2.initCodeClient({
+                client_id: CONFIG.GOOGLE_CLIENT_ID,
+                scope: AUTH_SCOPES,
+                ux_mode: 'popup',
+                access_type: 'offline',
+                callback: async (response) => {
+                    if (response.error) {
+                        console.error('❌ OAuth Error:', response.error);
+                        document.getElementById('errorMessage').textContent = `Authentication failed: ${response.error}`;
+                        document.getElementById('authSection')?.classList.add('hidden');
+                        document.getElementById('loadingSection')?.classList.add('hidden');
+                        document.getElementById('errorSection')?.classList.remove('hidden');
+                        return;
+                    }
+                    
+                    if (!response.code) {
+                        console.error('❌ OAuth response did not include an authorization code');
+                        document.getElementById('errorMessage').textContent = 'Missing authorization code from Google.';
+                        document.getElementById('errorSection')?.classList.remove('hidden');
+                        return;
+                    }
+                    
+                    try {
+                        console.log('🔐 Received authorization code, exchanging securely...');
+                        await exchangeCodeForSession(response.code);
+                        handleAuthenticatedState('interactive-login');
+                    } catch (error) {
+                        console.error('❌ Secure session exchange failed:', error);
+                        document.getElementById('errorMessage').textContent = error.message || 'Failed to complete authentication. Please try again.';
+                        document.getElementById('loadingSection')?.classList.add('hidden');
+                        document.getElementById('errorSection')?.classList.remove('hidden');
+                    }
+                }
+            });
+            
+            renderSignInButton();
+            resumeSessionFlow('initial');
+        }
         
-        // Also try when DOM is ready (backup)
+        window.fetchSessionAccessToken = fetchSessionAccessToken;
+        window.invalidateSecureSession = async function invalidateSecureSession() {
+            clearTimeout(silentRefreshTimer);
+            silentRefreshTimer = null;
+            setAccessToken(null);
+            try {
+                await fetch(`${API_BASE_URL}/auth/signout`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+            } catch (error) {
+                console.warn('⚠️ Failed to notify backend about sign-out:', error.message || error);
+            }
+        };
+        
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', initializeGoogleAuth);
         } else {

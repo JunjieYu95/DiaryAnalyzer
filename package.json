@@ -7,6 +7,7 @@
     "start": "python -m http.server 8000",
     "dev": "python -m http.server 8000",
     "serve": "npx http-server -p 8000 -c-1",
+    "start:backend": "node backend/server.js",
     "build": "echo 'No build step required for static web app'",
     "test": "echo 'No tests specified' && exit 0",
     "lint": "echo 'No linting configured' && exit 0",
@@ -23,6 +24,14 @@
   ],
   "author": "Your Name",
   "license": "MIT",
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "node-fetch": "^3.3.2",
+    "uuid": "^11.0.3"
+  },
   "devDependencies": {
     "sharp": "^0.32.0"
   },

@@ -16,8 +16,16 @@ const CONFIG = {
     
     // Calendar settings
     CALENDAR_SCOPES: [
-        'https://www.googleapis.com/auth/calendar.readonly'
+        'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/calendar'
     ],
+    
+    // Backend API that stores refresh tokens and returns short-lived access tokens
+    API_BASE_URL: 'http://localhost:8787',
+    
+    // Number of seconds before expiry to proactively refresh the session
+    SESSION_REFRESH_BUFFER_SECONDS: 60,
     
     // Default settings
     DEFAULT_DATE_RANGE: 'today',
