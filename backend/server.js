@@ -42,12 +42,51 @@ const SESSION_REFRESH_BUFFER_MS = 60 * 1000; // refresh access token 60s before 
 
 const app = express();
 
-const allowedOrigins = FRONTEND_ORIGIN.split(',').map(origin => origin.trim());
-const defaultSecureCookies = allowedOrigins.some(origin => origin.startsWith('https://'));
+const FALLBACK_ALLOWED_ORIGINS = [
+    'http://localhost:8000',
+    'https://diary-analyzer.vercel.app',
+    'https://diary-analyzer-zeta.vercel.app',
+    'https://diary-analyzer-auth.vercel.app'
+];
+
+const FALLBACK_ORIGIN_PATTERNS = [
+    /^https:\/\/diary-analyzer-[a-z0-9-]+\.vercel\.app$/i
+];
+
+function parseOrigins(value = '') {
+    return value
+        .split(',')
+        .map(origin => origin.trim())
+        .filter(Boolean);
+}
+
+function wildcardToRegex(pattern) {
+    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`^${escaped.replace(/\\\*/g, '.*')}$`, 'i');
+}
+
+const envOrigins = parseOrigins(FRONTEND_ORIGIN);
+const combinedOrigins = Array.from(new Set([...envOrigins, ...FALLBACK_ALLOWED_ORIGINS]));
+const exactOrigins = combinedOrigins.filter(origin => !origin.includes('*'));
+const wildcardOrigins = combinedOrigins.filter(origin => origin.includes('*'));
+
+const allowedOriginPatterns = [
+    ...FALLBACK_ORIGIN_PATTERNS,
+    ...wildcardOrigins.map(wildcardToRegex)
+];
+
+const defaultSecureCookies =
+    exactOrigins.some(origin => origin.startsWith('https://')) || allowedOriginPatterns.length > 0;
+
+function isAllowedOrigin(origin) {
+    if (!origin) return true;
+    if (exactOrigins.includes(origin)) return true;
+    return allowedOriginPatterns.some(pattern => pattern.test(origin));
+}
 
 const corsOptions = {
     origin(origin, callback) {
-        if (!origin || allowedOrigins.includes(origin)) {
+        if (isAllowedOrigin(origin)) {
             return callback(null, true);
         }
         return callback(new Error(`Origin ${origin} is not allowed`));
@@ -247,5 +286,9 @@ app.post('/auth/signout', (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`Secure auth server running on port ${PORT}`);
-    console.log(`Allowed origins: ${allowedOrigins.join(', ')}`);
+    const corsSummary = [
+        ...exactOrigins,
+        ...allowedOriginPatterns.map(pattern => pattern.toString())
+    ];
+    console.log(`Allowed origins/patterns: ${corsSummary.join(', ')}`);
 });

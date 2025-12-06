@@ -415,6 +415,20 @@ function debugGoogleSignInSetup() {
     console.log('🌐 Origin:', window.location.origin);
     console.log('🔑 Client ID from CONFIG:', CONFIG.GOOGLE_CLIENT_ID);
     console.log('🔑 Client ID from HTML element:');
+
+    const buttonDiv = document.getElementById('buttonDiv');
+    if (buttonDiv) {
+        console.log('📋 Sign-in container found:', buttonDiv);
+    } else {
+        console.warn('⚠️ Sign-in container #buttonDiv not found');
+    }
+
+    const customButton = document.getElementById('customGoogleBtn');
+    if (customButton) {
+        console.log('🔘 Custom Google button rendered:', !!customButton);
+    } else {
+        console.warn('⚠️ Custom Google button has not been rendered yet');
+    }
     
     const gIdOnload = document.getElementById('g_id_onload');
     if (gIdOnload) {
@@ -423,14 +437,14 @@ function debugGoogleSignInSetup() {
         console.log('📋 data-callback:', gIdOnload.getAttribute('data-callback'));
         console.log('📋 data-ux_mode:', gIdOnload.getAttribute('data-ux_mode'));
     } else {
-        console.error('❌ g_id_onload element not found!');
+        console.log('ℹ️ g_id_onload element not present (code-client flow)');
     }
     
     const gIdSignin = document.querySelector('.g_id_signin');
     if (gIdSignin) {
         console.log('📋 g_id_signin element found:', gIdSignin);
     } else {
-        console.error('❌ g_id_signin element not found!');
+        console.log('ℹ️ g_id_signin element not present (custom button in use)');
     }
     
     console.log('🔧 Callback function available:', typeof window.handleCredentialResponse);
