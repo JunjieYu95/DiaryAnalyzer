@@ -21,7 +21,7 @@ const CONFIG = {
         'https://www.googleapis.com/auth/calendar'
     ],
     
-    API_BASE_URL: 'http://localhost:8787',
+    API_BASE_URL: 'https://diary-analyzer-auth.vercel.app',
     SESSION_REFRESH_BUFFER_SECONDS: 60,
     
     // Default settings
