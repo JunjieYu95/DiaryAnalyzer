@@ -43,7 +43,7 @@ const SESSION_REFRESH_BUFFER_MS = 60 * 1000; // refresh access token 60s before 
 const app = express();
 
 const allowedOrigins = FRONTEND_ORIGIN.split(',').map(origin => origin.trim());
-const useSecureCookies = allowedOrigins.some(origin => origin.startsWith('https://'));
+const defaultSecureCookies = allowedOrigins.some(origin => origin.startsWith('https://'));
 
 const corsOptions = {
     origin(origin, callback) {
@@ -88,14 +88,36 @@ function destroySession(sessionId) {
     }
 }
 
-function setSessionCookie(res, sessionId) {
-    res.cookie(SESSION_COOKIE_NAME, sessionId, {
+function shouldUseSecureCookies(req) {
+    if (req?.headers?.origin) {
+        return req.headers.origin.startsWith('https://');
+    }
+
+    const forwardedProto = req?.headers?.['x-forwarded-proto'];
+    if (forwardedProto) {
+        return forwardedProto.split(',')[0].trim() === 'https';
+    }
+
+    if (typeof req?.secure === 'boolean') {
+        return req.secure;
+    }
+
+    return defaultSecureCookies;
+}
+
+function buildCookieOptions(req) {
+    const secure = shouldUseSecureCookies(req);
+    return {
         httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: useSecureCookies ? 'none' : 'lax',
+        secure,
+        sameSite: secure ? 'none' : 'lax',
         maxAge: SESSION_TTL_MS,
         path: '/'
-    });
+    };
+}
+
+function setSessionCookie(req, res, sessionId) {
+    res.cookie(SESSION_COOKIE_NAME, sessionId, buildCookieOptions(req));
 }
 
 async function requestGoogleToken(bodyParams) {
@@ -164,7 +186,7 @@ app.post('/auth/exchange', async (req, res) => {
             createdAt: Date.now()
         });
 
-        setSessionCookie(res, sessionId);
+        setSessionCookie(req, res, sessionId);
 
         res.json({
             accessToken: tokenResponse.access_token,
@@ -217,12 +239,8 @@ app.post('/auth/signout', (req, res) => {
     const sessionId = req.cookies?.[SESSION_COOKIE_NAME];
     destroySession(sessionId);
 
-    res.clearCookie(SESSION_COOKIE_NAME, {
-        httpOnly: true,
-        sameSite: useSecureCookies ? 'none' : 'lax',
-        secure: useSecureCookies,
-        path: '/'
-    });
+    const { maxAge, ...cookieOptions } = buildCookieOptions(req);
+    res.clearCookie(SESSION_COOKIE_NAME, cookieOptions);
 
     res.json({ success: true });
 });
