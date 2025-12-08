@@ -284,9 +284,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 📞 Support
 
 For issues, questions, or suggestions:
-- Open an issue on GitHub
+- Open an issue on GitHub.
 - Check the troubleshooting section above
-- Review Google Calendar API documentation
+- Review Google Calendar API documentation.
 
 ---
 
