@@ -569,26 +569,55 @@ window.loadCalendarData = async function loadCalendarData() {
     }
 }
 
+// Helper to make authenticated API calls with automatic token refresh on 401
+async function fetchWithTokenRefresh(url, options = {}, retryCount = 0) {
+    const accessToken = getAccessToken();
+    
+    const response = await fetch(url, {
+        ...options,
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            ...options.headers
+        }
+    });
+    
+    // If 401 and haven't retried yet, try refreshing the token
+    if (response.status === 401 && retryCount === 0) {
+        console.log('🔄 Got 401, attempting automatic token refresh...');
+        
+        // Try to refresh the token silently
+        if (window.refreshGoogleToken) {
+            try {
+                await window.refreshGoogleToken();
+                console.log('✅ Token refreshed, retrying API call...');
+                
+                // Retry the request with the new token
+                return fetchWithTokenRefresh(url, options, retryCount + 1);
+            } catch (refreshError) {
+                console.error('❌ Token refresh failed:', refreshError);
+                // Let the original 401 error propagate
+            }
+        }
+    }
+    
+    return response;
+}
+
 // Fetch real calendar events from Google Calendar API
 async function fetchGoogleCalendarEvents(accessToken) {
     try {
         console.log('🔍 Fetching calendar list...');
         console.log('🔑 Using access token (length):', accessToken ? accessToken.length : 0);
         
-        // Get calendar list
-        const calendarListResponse = await fetch(
-            'https://www.googleapis.com/calendar/v3/users/me/calendarList',
-            {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                }
-            }
+        // Get calendar list with automatic token refresh
+        const calendarListResponse = await fetchWithTokenRefresh(
+            'https://www.googleapis.com/calendar/v3/users/me/calendarList'
         );
 
         if (!calendarListResponse.ok) {
             if (calendarListResponse.status === 401) {
-                throw new Error(`401 Unauthorized: OAuth origin mismatch. Please add 'http://localhost:8000' to Google Cloud Console OAuth settings. Status: ${calendarListResponse.status}`);
+                throw new Error(`401 Unauthorized: Token expired and refresh failed. Please sign in again.`);
             }
             throw new Error(`Failed to fetch calendars: ${calendarListResponse.status}`);
         }
@@ -630,12 +659,8 @@ async function fetchGoogleCalendarEvents(accessToken) {
             
             console.log(`📅 API URL: ${apiUrl}`);
 
-            const response = await fetch(apiUrl, {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+            // Use fetchWithTokenRefresh for automatic 401 handling
+            const response = await fetchWithTokenRefresh(apiUrl);
 
             if (response.ok) {
                 const data = await response.json();
@@ -2420,13 +2445,8 @@ async function getLastEventEndTime() {
         return null;
     }
     
-    // Get calendars first
-    const calendarListResponse = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
-        headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-        }
-    });
+    // Get calendars first (with automatic token refresh)
+    const calendarListResponse = await fetchWithTokenRefresh('https://www.googleapis.com/calendar/v3/users/me/calendarList');
     
     if (!calendarListResponse.ok) {
         console.log('  - Failed to fetch calendar list');
@@ -2460,12 +2480,8 @@ async function getLastEventEndTime() {
             `orderBy=startTime&` +
             `maxResults=2500`;
         
-        const response = await fetch(apiUrl, {
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-            }
-        });
+        // Use fetchWithTokenRefresh for automatic 401 handling
+        const response = await fetchWithTokenRefresh(apiUrl);
         
         if (response.ok) {
             const data = await response.json();
@@ -2625,13 +2641,8 @@ async function createCalendarEvent(eventData) {
     
     console.log('📅 Creating event with payload:', eventPayload);
     
-    // Get the actual calendar ID for the selected calendar
-    const calendarListResponse = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
-        headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-        }
-    });
+    // Get the actual calendar ID for the selected calendar (with automatic token refresh)
+    const calendarListResponse = await fetchWithTokenRefresh('https://www.googleapis.com/calendar/v3/users/me/calendarList');
     
     if (!calendarListResponse.ok) {
         throw new Error('Failed to fetch calendar list');
@@ -2670,14 +2681,11 @@ async function createCalendarEvent(eventData) {
     console.log('📅 Creating event in calendar:', targetCalendar);
     console.log('📅 Event title:', eventPayload.summary);
     
-    const response = await fetch(
+    // Use fetchWithTokenRefresh for automatic 401 handling
+    const response = await fetchWithTokenRefresh(
         `https://www.googleapis.com/calendar/v3/calendars/${targetCalendar}/events`,
         {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-            },
             body: JSON.stringify(eventPayload)
         }
     );
@@ -2702,8 +2710,9 @@ async function createCalendarEvent(eventData) {
 function signOut() {
     console.log('🚪 Signing out...');
     
-    // Clear stored tokens
+    // Clear stored tokens (both old and new storage formats)
     localStorage.removeItem('googleToken');
+    localStorage.removeItem('googleTokenData');
     window.globalAccessToken = null;
     window.accessToken = null;
     
@@ -2809,13 +2818,8 @@ async function generateRandomRecap() {
         
         console.log(`🔍 Searching for random day between ${startDate.toLocaleDateString()} and ${endDate.toLocaleDateString()}`);
         
-        // Get calendar list
-        const calendarListResponse = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-            }
-        });
+        // Get calendar list (with automatic token refresh)
+        const calendarListResponse = await fetchWithTokenRefresh('https://www.googleapis.com/calendar/v3/users/me/calendarList');
         
         if (!calendarListResponse.ok) {
             throw new Error('Failed to fetch calendar list');
@@ -2843,12 +2847,8 @@ async function generateRandomRecap() {
                 `orderBy=startTime&` +
                 `maxResults=2500`;
             
-            const response = await fetch(apiUrl, {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+            // Use fetchWithTokenRefresh for automatic 401 handling
+            const response = await fetchWithTokenRefresh(apiUrl);
             
             if (response.ok) {
                 const data = await response.json();
@@ -3704,15 +3704,9 @@ async function ensureHighlightsCalendar() {
     }
 
     try {
-        // First, try to find existing highlights calendar
-        const calendarListResponse = await fetch(
-            'https://www.googleapis.com/calendar/v3/users/me/calendarList',
-            {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                }
-            }
+        // First, try to find existing highlights calendar (with automatic token refresh)
+        const calendarListResponse = await fetchWithTokenRefresh(
+            'https://www.googleapis.com/calendar/v3/users/me/calendarList'
         );
 
         if (calendarListResponse.ok) {
@@ -3730,16 +3724,12 @@ async function ensureHighlightsCalendar() {
             }
         }
 
-        // Create new highlights calendar
+        // Create new highlights calendar (with automatic token refresh)
         console.log('📅 Creating new highlights calendar...');
-        const createCalendarResponse = await fetch(
+        const createCalendarResponse = await fetchWithTokenRefresh(
             'https://www.googleapis.com/calendar/v3/calendars',
             {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                },
                 body: JSON.stringify({
                     summary: 'Highlights & Milestones',
                     description: 'Personal highlights, milestones, and achievements tracked through Diary Analyzer',
@@ -3792,14 +3782,11 @@ async function saveHighlightToGoogleCalendar(highlight) {
             colorId: getColorIdForType(highlight.type)
         };
 
-        const createEventResponse = await fetch(
+        // Use fetchWithTokenRefresh for automatic 401 handling
+        const createEventResponse = await fetchWithTokenRefresh(
             `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(highlightsCalendarId)}/events`,
             {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                },
                 body: JSON.stringify(event)
             }
         );

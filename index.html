@@ -303,6 +303,7 @@
     <!-- Google OAuth Setup - REQUEST ACCESS TOKEN NOT ID TOKEN -->
     <script>
         let tokenClient;
+        let tokenRefreshTimer = null;
         // Note: accessToken is declared in app.js, we'll just use window.accessToken
         
         // Helper function to update loading message with details
@@ -313,6 +314,142 @@
             if (loadingDetails) loadingDetails.textContent = details;
             console.log('📢', mainMessage, details ? `(${details})` : '');
         }
+        
+        // ============================================
+        // TOKEN REFRESH SYSTEM
+        // ============================================
+        
+        // Store token with expiration info
+        function storeTokenWithExpiration(accessToken, expiresIn) {
+            const expiresAt = Date.now() + (expiresIn * 1000);
+            const tokenData = {
+                token: accessToken,
+                expiresAt: expiresAt,
+                expiresIn: expiresIn
+            };
+            localStorage.setItem('googleTokenData', JSON.stringify(tokenData));
+            localStorage.setItem('googleToken', accessToken); // Keep for backward compatibility
+            console.log('💾 Token stored with expiration:', new Date(expiresAt).toLocaleString());
+            console.log('⏱️ Token expires in:', Math.round(expiresIn / 60), 'minutes');
+            
+            // Schedule proactive refresh (5 minutes before expiration)
+            scheduleTokenRefresh(expiresIn);
+        }
+        
+        // Get stored token data
+        function getStoredTokenData() {
+            try {
+                const data = localStorage.getItem('googleTokenData');
+                if (data) {
+                    return JSON.parse(data);
+                }
+            } catch (e) {
+                console.error('❌ Error parsing token data:', e);
+            }
+            return null;
+        }
+        
+        // Check if token is expired or about to expire (within 5 minutes)
+        function isTokenExpiredOrExpiring() {
+            const tokenData = getStoredTokenData();
+            if (!tokenData || !tokenData.expiresAt) {
+                // No expiration data, assume it might be expired
+                return true;
+            }
+            // Consider expired if less than 5 minutes remaining
+            const fiveMinutes = 5 * 60 * 1000;
+            return Date.now() > (tokenData.expiresAt - fiveMinutes);
+        }
+        
+        // Check if token is completely expired
+        function isTokenFullyExpired() {
+            const tokenData = getStoredTokenData();
+            if (!tokenData || !tokenData.expiresAt) {
+                return true;
+            }
+            return Date.now() > tokenData.expiresAt;
+        }
+        
+        // Schedule proactive token refresh
+        function scheduleTokenRefresh(expiresIn) {
+            // Clear any existing timer
+            if (tokenRefreshTimer) {
+                clearTimeout(tokenRefreshTimer);
+            }
+            
+            // Refresh 5 minutes before expiration (or at 80% of token lifetime)
+            const refreshIn = Math.max(
+                (expiresIn * 1000) - (5 * 60 * 1000), // 5 minutes before expiration
+                (expiresIn * 1000) * 0.8 // or 80% of token lifetime
+            );
+            
+            console.log('⏰ Scheduling token refresh in:', Math.round(refreshIn / 60000), 'minutes');
+            
+            tokenRefreshTimer = setTimeout(() => {
+                console.log('🔄 Proactive token refresh triggered...');
+                silentTokenRefresh();
+            }, refreshIn);
+        }
+        
+        // Silent token refresh - attempts to get new token without user interaction
+        function silentTokenRefresh(onSuccess, onFailure) {
+            console.log('🔄 Attempting silent token refresh...');
+            
+            if (!tokenClient) {
+                console.error('❌ Token client not initialized');
+                if (onFailure) onFailure(new Error('Token client not initialized'));
+                return;
+            }
+            
+            // Store callbacks for the token client callback to use
+            window._tokenRefreshCallbacks = { onSuccess, onFailure };
+            window._isRefreshAttempt = true;
+            
+            try {
+                // Request token with empty prompt for silent refresh
+                // If user has already consented, this won't show any popup
+                tokenClient.requestAccessToken({ prompt: '' });
+            } catch (error) {
+                console.error('❌ Silent refresh failed:', error);
+                window._isRefreshAttempt = false;
+                if (onFailure) onFailure(error);
+            }
+        }
+        
+        // Expose refresh function globally for app.js to use on 401 errors
+        window.refreshGoogleToken = function() {
+            return new Promise((resolve, reject) => {
+                silentTokenRefresh(
+                    (newToken) => {
+                        console.log('✅ Token refreshed successfully via promise');
+                        resolve(newToken);
+                    },
+                    (error) => {
+                        console.error('❌ Token refresh failed via promise:', error);
+                        reject(error);
+                    }
+                );
+            });
+        };
+        
+        // Check token validity and refresh if needed
+        window.ensureValidToken = async function() {
+            if (isTokenExpiredOrExpiring()) {
+                console.log('🔄 Token expired or expiring soon, refreshing...');
+                try {
+                    await window.refreshGoogleToken();
+                    return window.accessToken;
+                } catch (error) {
+                    console.error('❌ Failed to refresh token:', error);
+                    throw error;
+                }
+            }
+            return window.accessToken;
+        };
+        
+        // ============================================
+        // GOOGLE AUTH INITIALIZATION
+        // ============================================
         
         // Wait for Google API to load completely
         function initializeGoogleAuth() {
@@ -335,8 +472,21 @@
                 callback: (response) => {
                     console.log('🔐 OAuth Token Response:', response);
                     
+                    // Check if this is a refresh attempt
+                    const isRefresh = window._isRefreshAttempt;
+                    const callbacks = window._tokenRefreshCallbacks || {};
+                    window._isRefreshAttempt = false;
+                    window._tokenRefreshCallbacks = null;
+                    
                     if (response.error) {
                         console.error('❌ OAuth Error:', response.error);
+                        
+                        if (isRefresh && callbacks.onFailure) {
+                            callbacks.onFailure(new Error(response.error));
+                            return;
+                        }
+                        
+                        // For non-refresh failures, show auth section
                         document.getElementById('errorMessage').textContent = `Authentication failed: ${response.error}`;
                         document.getElementById('authSection').classList.add('hidden');
                         document.getElementById('errorSection').classList.remove('hidden');
@@ -346,16 +496,24 @@
                     if (response.access_token) {
                         console.log('✅ Got ACCESS TOKEN (length:', response.access_token.length, ')');
                         console.log('🔑 Token preview:', response.access_token.substring(0, 30) + '...');
+                        console.log('⏱️ Token expires_in:', response.expires_in, 'seconds');
                         
                         // THIS IS A REAL ACCESS TOKEN - IT WORKS WITH APIs!
                         window.accessToken = response.access_token;
                         window.globalAccessToken = response.access_token;
                         
-                        // Store token
-                        localStorage.setItem('googleToken', response.access_token);
-                        console.log('💾 Access token stored');
+                        // Store token WITH EXPIRATION INFO
+                        const expiresIn = response.expires_in || 3600; // Default 1 hour if not provided
+                        storeTokenWithExpiration(response.access_token, expiresIn);
                         
-                        // Show loading and load data
+                        // If this was a refresh, call success callback and return
+                        if (isRefresh && callbacks.onSuccess) {
+                            console.log('🔄 Silent refresh completed successfully');
+                            callbacks.onSuccess(response.access_token);
+                            return;
+                        }
+                        
+                        // Show loading and load data (for initial auth)
                         document.getElementById('authSection').classList.add('hidden');
                         document.getElementById('loadingSection').classList.remove('hidden');
                         updateLoadingMessage('Authentication successful!', 'Initializing calendar API...');
@@ -429,54 +587,102 @@
             
             document.getElementById("customGoogleBtn").addEventListener('click', () => {
                 console.log('🖱️ Sign-in button clicked - requesting access token...');
-                // Request an access token
-                tokenClient.requestAccessToken({prompt: ''});
+                // Request an access token (consent prompt for new users)
+                tokenClient.requestAccessToken({prompt: 'consent'});
             });
             
             console.log('✅ Sign-in button rendered successfully');
             
-            // Check if we already have a token
+            // Check if we already have a valid token
+            const tokenData = getStoredTokenData();
             const storedToken = localStorage.getItem('googleToken');
-            if (storedToken && storedToken.length < 500) { // Access tokens are shorter than JWTs
-                console.log('♻️ Found stored access token, attempting to use it...');
-                window.accessToken = storedToken;
-                window.globalAccessToken = storedToken;
-                
-                // Try loading data
-                document.getElementById('authSection').classList.add('hidden');
-                document.getElementById('loadingSection').classList.remove('hidden');
-                updateLoadingMessage('Using stored credentials...', 'Initializing...');
-                
-                // Use the same retry logic
-                const tryLoadCalendarData = (attempts = 0, maxAttempts = 10) => {
-                    console.log(`🔄 Attempt ${attempts + 1}/${maxAttempts} to load calendar data...`);
+            
+            if (storedToken && storedToken.length < 500) {
+                // Check if token is expired
+                if (tokenData && !isTokenFullyExpired()) {
+                    console.log('♻️ Found valid stored access token, using it...');
+                    window.accessToken = storedToken;
+                    window.globalAccessToken = storedToken;
                     
-                    if (window.loadCalendarData && typeof window.loadCalendarData === 'function') {
-                        console.log('✅ Found loadCalendarData function, calling it...');
-                        updateLoadingMessage('Loading calendar data...', 'Fetching events from Google Calendar...');
-                        try {
-                            window.loadCalendarData();
-                        } catch (error) {
-                            console.error('❌ Error calling loadCalendarData:', error);
-                            document.getElementById('errorMessage').textContent = `Failed to load calendar data: ${error.message}`;
+                    // Schedule refresh based on remaining time
+                    const remainingMs = tokenData.expiresAt - Date.now();
+                    const remainingSec = Math.max(60, Math.floor(remainingMs / 1000));
+                    scheduleTokenRefresh(remainingSec);
+                    
+                    console.log('⏱️ Token valid for:', Math.round(remainingMs / 60000), 'more minutes');
+                    
+                    // Try loading data
+                    document.getElementById('authSection').classList.add('hidden');
+                    document.getElementById('loadingSection').classList.remove('hidden');
+                    updateLoadingMessage('Using stored credentials...', 'Initializing...');
+                    
+                    // Use the same retry logic
+                    const tryLoadCalendarData = (attempts = 0, maxAttempts = 10) => {
+                        console.log(`🔄 Attempt ${attempts + 1}/${maxAttempts} to load calendar data...`);
+                        
+                        if (window.loadCalendarData && typeof window.loadCalendarData === 'function') {
+                            console.log('✅ Found loadCalendarData function, calling it...');
+                            updateLoadingMessage('Loading calendar data...', 'Fetching events from Google Calendar...');
+                            try {
+                                window.loadCalendarData();
+                            } catch (error) {
+                                console.error('❌ Error calling loadCalendarData:', error);
+                                document.getElementById('errorMessage').textContent = `Failed to load calendar data: ${error.message}`;
+                                document.getElementById('loadingSection').classList.add('hidden');
+                                document.getElementById('errorSection').classList.remove('hidden');
+                            }
+                        } else if (attempts < maxAttempts) {
+                            const nextAttempt = attempts + 1;
+                            const waitTime = 500;
+                            console.log(`⏳ loadCalendarData not ready yet, retrying in ${waitTime}ms... (${nextAttempt}/${maxAttempts})`);
+                            updateLoadingMessage('Loading calendar data...', `Waiting for app.js... (${nextAttempt}/${maxAttempts})`);
+                            setTimeout(() => tryLoadCalendarData(nextAttempt, maxAttempts), waitTime);
+                        } else {
+                            console.error('❌ Failed to load app.js after', maxAttempts, 'attempts');
+                            document.getElementById('errorMessage').textContent = 'Failed to load app.js. Please refresh the page.';
                             document.getElementById('loadingSection').classList.add('hidden');
                             document.getElementById('errorSection').classList.remove('hidden');
                         }
-                    } else if (attempts < maxAttempts) {
-                        const nextAttempt = attempts + 1;
-                        const waitTime = 500;
-                        console.log(`⏳ loadCalendarData not ready yet, retrying in ${waitTime}ms... (${nextAttempt}/${maxAttempts})`);
-                        updateLoadingMessage('Loading calendar data...', `Waiting for app.js... (${nextAttempt}/${maxAttempts})`);
-                        setTimeout(() => tryLoadCalendarData(nextAttempt, maxAttempts), waitTime);
-                    } else {
-                        console.error('❌ Failed to load app.js after', maxAttempts, 'attempts');
-                        document.getElementById('errorMessage').textContent = 'Failed to load app.js. Please refresh the page.';
-                        document.getElementById('loadingSection').classList.add('hidden');
-                        document.getElementById('errorSection').classList.remove('hidden');
-                    }
-                };
-                
-                tryLoadCalendarData();
+                    };
+                    
+                    tryLoadCalendarData();
+                } else if (storedToken) {
+                    // Token exists but is expired - try silent refresh
+                    console.log('🔄 Stored token expired, attempting silent refresh...');
+                    document.getElementById('authSection').classList.add('hidden');
+                    document.getElementById('loadingSection').classList.remove('hidden');
+                    updateLoadingMessage('Refreshing credentials...', 'Please wait...');
+                    
+                    silentTokenRefresh(
+                        (newToken) => {
+                            console.log('✅ Silent refresh successful on page load');
+                            updateLoadingMessage('Credentials refreshed!', 'Loading calendar data...');
+                            
+                            // Load calendar data
+                            const tryLoadCalendarData = (attempts = 0, maxAttempts = 10) => {
+                                if (window.loadCalendarData && typeof window.loadCalendarData === 'function') {
+                                    try {
+                                        window.loadCalendarData();
+                                    } catch (error) {
+                                        console.error('❌ Error loading calendar:', error);
+                                        document.getElementById('loadingSection').classList.add('hidden');
+                                        document.getElementById('errorSection').classList.remove('hidden');
+                                    }
+                                } else if (attempts < maxAttempts) {
+                                    setTimeout(() => tryLoadCalendarData(attempts + 1, maxAttempts), 500);
+                                }
+                            };
+                            tryLoadCalendarData();
+                        },
+                        (error) => {
+                            console.log('⚠️ Silent refresh failed, showing sign-in button');
+                            document.getElementById('loadingSection').classList.add('hidden');
+                            document.getElementById('authSection').classList.remove('hidden');
+                        }
+                    );
+                }
+            } else {
+                console.log('🔍 No stored token found');
             }
         }
         
@@ -493,7 +699,7 @@
     
     <!-- Load app.js WITHOUT defer so it's available when we need it -->
     <!-- Cache busting: add timestamp to force reload -->
-    <script src="app.js?v=20250117-1610"></script>
+    <script src="app.js?v=20251220-autorefresh"></script>
 </body>
 </html>
 <!-- Reverted to pre-mobile-framework version -->
