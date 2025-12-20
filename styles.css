@@ -18,6 +18,44 @@ body {
     font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
     opacity: 0;
     animation: fadeIn 0.6s ease-out forwards;
+    /* Safe area padding for notched phones (iPhone X+) */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+}
+
+/* Standalone PWA Mode Styles */
+@media all and (display-mode: standalone) {
+    body {
+        /* Extra padding when running as standalone app */
+        padding-top: max(env(safe-area-inset-top), 20px);
+    }
+    
+    /* Make header more compact in standalone mode */
+    .app-header {
+        padding-top: max(env(safe-area-inset-top), 1rem);
+    }
+    
+    /* Ensure modals respect safe areas */
+    .log-modal-content,
+    .day-details-modal-content,
+    .random-recap-modal-content {
+        margin-top: max(env(safe-area-inset-top), 2rem);
+        margin-bottom: max(env(safe-area-inset-bottom), 2rem);
+    }
+    
+    /* Footer respects safe area */
+    .app-footer {
+        padding-bottom: max(env(safe-area-inset-bottom), 1.5rem);
+    }
+}
+
+/* iOS Safari Standalone Mode specific */
+@supports (-webkit-touch-callout: none) {
+    body.standalone-mode {
+        min-height: -webkit-fill-available;
+    }
 }
 
 @keyframes fadeIn {
@@ -3111,6 +3149,128 @@ body {
 
 .log-modal:not(.hidden) .log-modal-content {
     transform: scale(1) translateY(0);
+}
+
+/* Quick Log Modal - Enhanced as main entry point */
+#quickLogModal {
+    /* Show modal above everything */
+    z-index: 1001;
+}
+
+#quickLogModal .log-modal-content {
+    /* Slightly larger for prominence */
+    width: min(95vw, 550px);
+    max-height: 90vh;
+    border-radius: 28px;
+    box-shadow: 0 30px 100px rgba(0, 0, 0, 0.5);
+}
+
+#quickLogModal .log-modal-header h2 {
+    font-size: 1.75rem;
+}
+
+#quickLogModal .form-group input,
+#quickLogModal .form-group select,
+#quickLogModal .form-group textarea {
+    font-size: 1rem;
+    padding: 1rem;
+    border-radius: 12px;
+}
+
+#quickLogModal .btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 1rem 2rem;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.25);
+}
+
+#quickLogModal .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.35);
+}
+
+#quickLogModal .btn-secondary {
+    background: #f3f4f6;
+    color: #374151;
+    border: 2px solid #e5e7eb;
+    padding: 1rem 2rem;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+#quickLogModal .btn-secondary:hover {
+    background: #e5e7eb;
+    border-color: #d1d5db;
+}
+
+#quickLogModal .modal-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+}
+
+#quickLogModal .close-btn {
+    background: none;
+    border: none;
+    font-size: 1.75rem;
+    cursor: pointer;
+    color: #6b7280;
+    padding: 0.5rem;
+    border-radius: 50%;
+    transition: all 0.2s;
+    width: 2.75rem;
+    height: 2.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+#quickLogModal .close-btn:hover {
+    background: #f3f4f6;
+    color: #374151;
+    transform: scale(1.1);
+}
+
+/* Mobile responsive for Quick Log modal */
+@media (max-width: 768px) {
+    #quickLogModal .log-modal-content {
+        padding: 1.5rem;
+        margin: 1rem;
+        max-height: 95vh;
+    }
+    
+    #quickLogModal .modal-actions {
+        flex-direction: column;
+    }
+    
+    #quickLogModal .btn-primary,
+    #quickLogModal .btn-secondary {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    #quickLogModal .log-modal-content {
+        padding: 1rem;
+        margin: 0.5rem;
+        border-radius: 20px;
+    }
+    
+    #quickLogModal .log-modal-header h2 {
+        font-size: 1.5rem;
+    }
 }
 
 .log-modal-content::before {
