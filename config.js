@@ -22,10 +22,7 @@ const CONFIG = {
     DEFAULT_VIEW_MODE: 'distribution',
     
     // Debug mode
-    DEBUG: false,
-    
-    // Client-side only mode (no backend)
-    USE_BACKEND_PROXY: false
+    DEBUG: false
 };
 
 // Export for use in other files
