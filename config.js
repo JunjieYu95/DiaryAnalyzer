@@ -2,29 +2,40 @@
 // This file is safe to commit - Client ID is public by design
 
 const CONFIG = {
+    // Supabase Configuration
+    SUPABASE_URL: 'https://kiddsrordcksmqbxyerv.supabase.co',
+    SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpZGRzcm9yZGNrc21xYnh5ZXJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3MTM2MzYsImV4cCI6MjA3NTI4OTYzNn0.EJWsHLDaRMdHAMgGq5cVemYyHtJGyqsQSOOD7B2Cigk',
+    
+    // Supabase Edge Function URLs
+    AUTH_FUNCTION_URL: 'https://kiddsrordcksmqbxyerv.supabase.co/functions/v1/auth-google',
+    CALENDAR_PROXY_URL: 'https://kiddsrordcksmqbxyerv.supabase.co/functions/v1/calendar-proxy',
+    
     // Google OAuth 2.0 Client ID
     // In production, this is injected by Vercel from environment variable
-    // Locally, use your own Client ID
     GOOGLE_CLIENT_ID: '1025050561840-jedvsb3bce3gjvj5k081l5afia5h0mnq.apps.googleusercontent.com',
     
-    // Google API Key (not needed for OAuth 2.0 flow)
-    GOOGLE_API_KEY: 'NOT_NEEDED_FOR_DIRECT_FETCH',
+    // OAuth Scopes - requesting offline access for refresh tokens
+    GOOGLE_SCOPES: [
+        'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/calendar',
+        'https://www.googleapis.com/auth/userinfo.email',
+        'https://www.googleapis.com/auth/userinfo.profile'
+    ],
     
     // Application settings
     APP_NAME: 'Diary Analyzer',
-    APP_VERSION: '2.0.0',
-    
-    // Calendar settings
-    CALENDAR_SCOPES: [
-        'https://www.googleapis.com/auth/calendar.readonly'
-    ],
+    APP_VERSION: '2.1.0',
     
     // Default settings
     DEFAULT_DATE_RANGE: 'today',
     DEFAULT_VIEW_MODE: 'distribution',
     
     // Debug mode
-    DEBUG: false
+    DEBUG: false,
+    
+    // Use backend proxy for API calls (enables refresh tokens)
+    USE_BACKEND_PROXY: true
 };
 
 // Export for use in other files
