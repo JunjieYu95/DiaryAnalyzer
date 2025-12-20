@@ -300,12 +300,23 @@
     <!-- config.js must load BEFORE app.js, so no defer -->
     <script src="config.js"></script>
     
-    <!-- Google OAuth Setup - REQUEST ACCESS TOKEN NOT ID TOKEN -->
+    <!-- Google OAuth Setup - Client-Side Token Flow with Silent Refresh -->
     <script>
-        let tokenClient;
-        // Note: accessToken is declared in app.js, we'll just use window.accessToken
+        // ============================================
+        // CLIENT-SIDE OAUTH WITH SILENT TOKEN REFRESH
+        // ============================================
+        // 
+        // How this works:
+        // 1. Access tokens are stored locally with expiration time
+        // 2. When token expires, we attempt "silent refresh" via Google
+        // 3. Silent refresh works if user is still logged into Google
+        // 4. If silent refresh fails, user clicks sign-in (just account picker, no password)
+        //
         
-        // Helper function to update loading message with details
+        let tokenClient = null;
+        let tokenRefreshTimer = null;
+        
+        // Helper function to update loading message
         function updateLoadingMessage(mainMessage, details = '') {
             const loadingMsg = document.getElementById('loadingMessage');
             const loadingDetails = document.getElementById('loadingDetails');
@@ -314,89 +325,250 @@
             console.log('📢', mainMessage, details ? `(${details})` : '');
         }
         
-        // Wait for Google API to load completely
+        // ============================================
+        // TOKEN STORAGE
+        // ============================================
+        
+        function storeToken(accessToken, expiresIn) {
+            const expiresAt = Date.now() + (expiresIn * 1000);
+            const tokenData = {
+                token: accessToken,
+                expiresAt: expiresAt,
+                storedAt: Date.now()
+            };
+            localStorage.setItem('diaryAnalyzerToken', JSON.stringify(tokenData));
+            console.log('💾 Token stored, expires:', new Date(expiresAt).toLocaleString());
+            
+            // Schedule proactive refresh
+            scheduleTokenRefresh(expiresIn);
+            
+            return tokenData;
+        }
+        
+        function getStoredToken() {
+            try {
+                const data = localStorage.getItem('diaryAnalyzerToken');
+                if (data) {
+                    return JSON.parse(data);
+                }
+            } catch (e) {
+                console.error('Error reading stored token:', e);
+            }
+            return null;
+        }
+        
+        function clearStoredToken() {
+            localStorage.removeItem('diaryAnalyzerToken');
+            localStorage.removeItem('googleToken'); // Legacy
+            localStorage.removeItem('googleTokenData'); // Legacy
+            window.accessToken = null;
+            window.globalAccessToken = null;
+            console.log('🗑️ Token cleared');
+        }
+        
+        function isTokenValid() {
+            const tokenData = getStoredToken();
+            if (!tokenData || !tokenData.expiresAt) return false;
+            // Valid if more than 5 minutes remaining
+            return Date.now() < (tokenData.expiresAt - 5 * 60 * 1000);
+        }
+        
+        function isTokenExpired() {
+            const tokenData = getStoredToken();
+            if (!tokenData || !tokenData.expiresAt) return true;
+            return Date.now() > tokenData.expiresAt;
+        }
+        
+        // ============================================
+        // TOKEN REFRESH
+        // ============================================
+        
+        function scheduleTokenRefresh(expiresIn) {
+            if (tokenRefreshTimer) {
+                clearTimeout(tokenRefreshTimer);
+            }
+            
+            // Refresh 5 minutes before expiration
+            const refreshIn = Math.max((expiresIn - 300) * 1000, 60000);
+            console.log('⏰ Token refresh scheduled in', Math.round(refreshIn / 60000), 'minutes');
+            
+            tokenRefreshTimer = setTimeout(() => {
+                console.log('🔄 Proactive token refresh triggered');
+                silentTokenRefresh();
+            }, refreshIn);
+        }
+        
+        function silentTokenRefresh(onSuccess, onFailure) {
+            console.log('🔄 Attempting silent token refresh...');
+            
+            if (!tokenClient) {
+                console.error('Token client not initialized');
+                if (onFailure) onFailure(new Error('Token client not initialized'));
+                return;
+            }
+            
+            // Store callbacks
+            window._refreshCallbacks = { onSuccess, onFailure };
+            window._isRefreshAttempt = true;
+            
+            try {
+                // Empty prompt = silent refresh (no popup if user already consented)
+                tokenClient.requestAccessToken({ prompt: '' });
+            } catch (error) {
+                console.error('Silent refresh error:', error);
+                window._isRefreshAttempt = false;
+                if (onFailure) onFailure(error);
+            }
+        }
+        
+        // Global refresh function for app.js to use
+        window.refreshGoogleToken = function() {
+            return new Promise((resolve, reject) => {
+                silentTokenRefresh(resolve, reject);
+            });
+        };
+        
+        // ============================================
+        // GOOGLE AUTH INITIALIZATION
+        // ============================================
+        
         function initializeGoogleAuth() {
             console.log('🔧 Initializing Google OAuth...');
             
-            // Check if google object exists
             if (typeof google === 'undefined') {
-                console.log('⏳ Google API not loaded yet, retrying...');
+                console.log('⏳ Waiting for Google API...');
                 setTimeout(initializeGoogleAuth, 100);
                 return;
             }
             
-            console.log('✅ Google API loaded, setting up OAuth...');
+            console.log('✅ Google API loaded');
             
-            // Initialize the Token Client for OAuth 2.0
-            // Client ID comes from config.js - never hardcode credentials
+            // Initialize token client
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CONFIG.GOOGLE_CLIENT_ID,
-                scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar',
-                callback: (response) => {
-                    console.log('🔐 OAuth Token Response:', response);
-                    
-                    if (response.error) {
-                        console.error('❌ OAuth Error:', response.error);
-                        document.getElementById('errorMessage').textContent = `Authentication failed: ${response.error}`;
-                        document.getElementById('authSection').classList.add('hidden');
-                        document.getElementById('errorSection').classList.remove('hidden');
-                        return;
-                    }
-                    
-                    if (response.access_token) {
-                        console.log('✅ Got ACCESS TOKEN (length:', response.access_token.length, ')');
-                        console.log('🔑 Token preview:', response.access_token.substring(0, 30) + '...');
-                        
-                        // THIS IS A REAL ACCESS TOKEN - IT WORKS WITH APIs!
-                        window.accessToken = response.access_token;
-                        window.globalAccessToken = response.access_token;
-                        
-                        // Store token
-                        localStorage.setItem('googleToken', response.access_token);
-                        console.log('💾 Access token stored');
-                        
-                        // Show loading and load data
-                        document.getElementById('authSection').classList.add('hidden');
-                        document.getElementById('loadingSection').classList.remove('hidden');
-                        updateLoadingMessage('Authentication successful!', 'Initializing calendar API...');
-                        
-                        // Load calendar data with retry logic
-                        const tryLoadCalendarData = (attempts = 0, maxAttempts = 10) => {
-                            console.log(`🔄 Attempt ${attempts + 1}/${maxAttempts} to load calendar data...`);
-                            
-                            if (window.loadCalendarData && typeof window.loadCalendarData === 'function') {
-                                console.log('✅ Found loadCalendarData function, calling it...');
-                                updateLoadingMessage('Loading calendar data...', 'Fetching events from Google Calendar...');
-                                try {
-                                    window.loadCalendarData();
-                                } catch (error) {
-                                    console.error('❌ Error calling loadCalendarData:', error);
-                                    document.getElementById('errorMessage').textContent = `Failed to load calendar data: ${error.message}`;
-                                    document.getElementById('loadingSection').classList.add('hidden');
-                                    document.getElementById('errorSection').classList.remove('hidden');
-                                }
-                            } else if (attempts < maxAttempts) {
-                                const nextAttempt = attempts + 1;
-                                const waitTime = 500;
-                                console.log(`⏳ loadCalendarData not ready yet, retrying in ${waitTime}ms... (${nextAttempt}/${maxAttempts})`);
-                                updateLoadingMessage('Loading calendar data...', `Waiting for app.js... (${nextAttempt}/${maxAttempts})`);
-                                setTimeout(() => tryLoadCalendarData(nextAttempt, maxAttempts), waitTime);
-                            } else {
-                                console.error('❌ Failed to load app.js after', maxAttempts, 'attempts');
-                                document.getElementById('errorMessage').textContent = 'Failed to load app.js. Please refresh the page.';
-                                document.getElementById('loadingSection').classList.add('hidden');
-                                document.getElementById('errorSection').classList.remove('hidden');
-                            }
-                        };
-                        
-                        tryLoadCalendarData();
-                    }
-                },
+                scope: CONFIG.GOOGLE_SCOPES.join(' '),
+                callback: handleTokenResponse
             });
             
-            console.log('🎨 Rendering sign-in button...');
+            // Render sign-in button
+            renderSignInButton();
             
-            // Create a custom button (Google's renderButton only works with ID tokens)
+            // Check for existing valid token
+            checkExistingToken();
+        }
+        
+        function handleTokenResponse(response) {
+            console.log('🔐 Token response received');
+            
+            const isRefresh = window._isRefreshAttempt;
+            const callbacks = window._refreshCallbacks || {};
+            window._isRefreshAttempt = false;
+            window._refreshCallbacks = null;
+            
+            if (response.error) {
+                console.error('❌ OAuth error:', response.error);
+                
+                if (isRefresh) {
+                    // Silent refresh failed - this is expected if user logged out of Google
+                    console.log('⚠️ Silent refresh failed, user may need to sign in again');
+                    if (callbacks.onFailure) callbacks.onFailure(new Error(response.error));
+                    return;
+                }
+                
+                // Regular auth failed
+                document.getElementById('errorMessage').textContent = `Authentication failed: ${response.error}`;
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('errorSection').classList.remove('hidden');
+                return;
+            }
+            
+            if (response.access_token) {
+                console.log('✅ Got access token');
+                
+                // Store token
+                const expiresIn = response.expires_in || 3600;
+                storeToken(response.access_token, expiresIn);
+                
+                // Set global variables
+                window.accessToken = response.access_token;
+                window.globalAccessToken = response.access_token;
+                
+                if (isRefresh) {
+                    console.log('🔄 Silent refresh successful!');
+                    if (callbacks.onSuccess) callbacks.onSuccess(response.access_token);
+                    return;
+                }
+                
+                // Initial auth - load app
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('loadingSection').classList.remove('hidden');
+                updateLoadingMessage('Signed in!', 'Loading calendar data...');
+                
+                loadAppData();
+            }
+        }
+        
+        function checkExistingToken() {
+            const tokenData = getStoredToken();
+            
+            if (!tokenData || !tokenData.token) {
+                console.log('🔍 No stored token');
+                return;
+            }
+            
+            if (isTokenValid()) {
+                // Token still valid, use it
+                console.log('♻️ Using valid stored token');
+                window.accessToken = tokenData.token;
+                window.globalAccessToken = tokenData.token;
+                
+                // Schedule refresh
+                const remainingMs = tokenData.expiresAt - Date.now();
+                scheduleTokenRefresh(Math.floor(remainingMs / 1000));
+                
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('loadingSection').classList.remove('hidden');
+                updateLoadingMessage('Loading...', 'Using stored credentials');
+                
+                loadAppData();
+                
+            } else if (!isTokenExpired()) {
+                // Token expiring soon, try refresh
+                console.log('⚠️ Token expiring soon, refreshing...');
+                window.accessToken = tokenData.token;
+                window.globalAccessToken = tokenData.token;
+                
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('loadingSection').classList.remove('hidden');
+                updateLoadingMessage('Refreshing...', 'Updating credentials');
+                
+                silentTokenRefresh(
+                    () => loadAppData(),
+                    () => loadAppData() // Try with existing token anyway
+                );
+                
+            } else {
+                // Token expired, try silent refresh
+                console.log('⏰ Token expired, attempting silent refresh...');
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('loadingSection').classList.remove('hidden');
+                updateLoadingMessage('Signing in...', 'Please wait');
+                
+                silentTokenRefresh(
+                    (token) => {
+                        console.log('✅ Silent refresh worked!');
+                        loadAppData();
+                    },
+                    (error) => {
+                        console.log('⚠️ Silent refresh failed, showing sign-in');
+                        document.getElementById('loadingSection').classList.add('hidden');
+                        document.getElementById('authSection').classList.remove('hidden');
+                    }
+                );
+            }
+        }
+        
+        function renderSignInButton() {
             const buttonDiv = document.getElementById("buttonDiv");
             buttonDiv.innerHTML = `
                 <button id="customGoogleBtn" style="
@@ -428,72 +600,40 @@
             `;
             
             document.getElementById("customGoogleBtn").addEventListener('click', () => {
-                console.log('🖱️ Sign-in button clicked - requesting access token...');
-                // Request an access token
-                tokenClient.requestAccessToken({prompt: ''});
+                console.log('🖱️ Sign-in clicked');
+                // First sign-in needs consent, subsequent ones are silent
+                const tokenData = getStoredToken();
+                const prompt = tokenData ? '' : 'consent';
+                tokenClient.requestAccessToken({ prompt });
             });
-            
-            console.log('✅ Sign-in button rendered successfully');
-            
-            // Check if we already have a token
-            const storedToken = localStorage.getItem('googleToken');
-            if (storedToken && storedToken.length < 500) { // Access tokens are shorter than JWTs
-                console.log('♻️ Found stored access token, attempting to use it...');
-                window.accessToken = storedToken;
-                window.globalAccessToken = storedToken;
-                
-                // Try loading data
-                document.getElementById('authSection').classList.add('hidden');
-                document.getElementById('loadingSection').classList.remove('hidden');
-                updateLoadingMessage('Using stored credentials...', 'Initializing...');
-                
-                // Use the same retry logic
-                const tryLoadCalendarData = (attempts = 0, maxAttempts = 10) => {
-                    console.log(`🔄 Attempt ${attempts + 1}/${maxAttempts} to load calendar data...`);
-                    
-                    if (window.loadCalendarData && typeof window.loadCalendarData === 'function') {
-                        console.log('✅ Found loadCalendarData function, calling it...');
-                        updateLoadingMessage('Loading calendar data...', 'Fetching events from Google Calendar...');
-                        try {
-                            window.loadCalendarData();
-                        } catch (error) {
-                            console.error('❌ Error calling loadCalendarData:', error);
-                            document.getElementById('errorMessage').textContent = `Failed to load calendar data: ${error.message}`;
-                            document.getElementById('loadingSection').classList.add('hidden');
-                            document.getElementById('errorSection').classList.remove('hidden');
-                        }
-                    } else if (attempts < maxAttempts) {
-                        const nextAttempt = attempts + 1;
-                        const waitTime = 500;
-                        console.log(`⏳ loadCalendarData not ready yet, retrying in ${waitTime}ms... (${nextAttempt}/${maxAttempts})`);
-                        updateLoadingMessage('Loading calendar data...', `Waiting for app.js... (${nextAttempt}/${maxAttempts})`);
-                        setTimeout(() => tryLoadCalendarData(nextAttempt, maxAttempts), waitTime);
-                    } else {
-                        console.error('❌ Failed to load app.js after', maxAttempts, 'attempts');
-                        document.getElementById('errorMessage').textContent = 'Failed to load app.js. Please refresh the page.';
-                        document.getElementById('loadingSection').classList.add('hidden');
-                        document.getElementById('errorSection').classList.remove('hidden');
-                    }
-                };
-                
-                tryLoadCalendarData();
-            }
         }
         
-        // Start initialization when page loads
-        window.onload = initializeGoogleAuth;
+        function loadAppData() {
+            const tryLoad = (attempts = 0) => {
+                if (window.loadCalendarData) {
+                    updateLoadingMessage('Loading calendar...', 'Fetching events');
+                    window.loadCalendarData();
+                } else if (attempts < 10) {
+                    setTimeout(() => tryLoad(attempts + 1), 500);
+                } else {
+                    document.getElementById('errorMessage').textContent = 'Failed to load app';
+                    document.getElementById('loadingSection').classList.add('hidden');
+                    document.getElementById('errorSection').classList.remove('hidden');
+                }
+            };
+            tryLoad();
+        }
         
-        // Also try when DOM is ready (backup)
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initializeGoogleAuth);
-        } else {
-            initializeGoogleAuth();
+        // Start on page load
+        window.onload = initializeGoogleAuth;
+        if (document.readyState !== 'loading') {
+            setTimeout(initializeGoogleAuth, 100);
         }
     </script>
     
     <!-- Load app.js WITHOUT defer so it's available when we need it -->
     <!-- Cache busting: add timestamp to force reload -->
-    <script src="app.js?v=20250117-1610"></script>
+    <script src="app.js?v=20251220-silent-refresh"></script>
 </body>
 </html>
 <!-- Reverted to pre-mobile-framework version -->

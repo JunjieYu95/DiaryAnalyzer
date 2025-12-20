@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 🌐 Start Frontend Server Script
-# Simpler version - just starts the frontend (backend is on Supabase cloud)
+# Starts the local development server
 
 set -e
 

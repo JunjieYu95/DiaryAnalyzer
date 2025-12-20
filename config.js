@@ -4,20 +4,18 @@
 const CONFIG = {
     // Google OAuth 2.0 Client ID
     // In production, this is injected by Vercel from environment variable
-    // Locally, use your own Client ID
     GOOGLE_CLIENT_ID: '1025050561840-jedvsb3bce3gjvj5k081l5afia5h0mnq.apps.googleusercontent.com',
     
-    // Google API Key (not needed for OAuth 2.0 flow)
-    GOOGLE_API_KEY: 'NOT_NEEDED_FOR_DIRECT_FETCH',
+    // OAuth Scopes
+    GOOGLE_SCOPES: [
+        'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/calendar'
+    ],
     
     // Application settings
     APP_NAME: 'Diary Analyzer',
-    APP_VERSION: '2.0.0',
-    
-    // Calendar settings
-    CALENDAR_SCOPES: [
-        'https://www.googleapis.com/auth/calendar.readonly'
-    ],
+    APP_VERSION: '2.1.0',
     
     // Default settings
     DEFAULT_DATE_RANGE: 'today',
