@@ -41,75 +41,6 @@ function getAccessToken() {
     return window.accessToken || window.globalAccessToken || null;
 }
 
-// Helper to get current user ID (for backend proxy)
-function getCurrentUserId() {
-    if (window.getCurrentUserId && typeof window.getCurrentUserId === 'function') {
-        return window.getCurrentUserId();
-    }
-    return window.currentUserId || null;
-}
-
-// Check if we should use the backend proxy
-function shouldUseBackendProxy() {
-    return CONFIG.USE_BACKEND_PROXY && CONFIG.CALENDAR_PROXY_URL && getCurrentUserId();
-}
-
-// Make a calendar API call via the backend proxy
-async function fetchViaBackendProxy(endpoint, method = 'GET', body = null, params = null) {
-    const userId = getCurrentUserId();
-    
-    if (!userId) {
-        throw new Error('No user ID available. Please sign in again.');
-    }
-    
-    console.log('📡 Calling calendar API via backend proxy:', endpoint);
-    
-    const requestBody = {
-        user_id: userId,
-        endpoint: endpoint,
-        method: method
-    };
-    
-    if (body) {
-        requestBody.body = body;
-    }
-    
-    if (params) {
-        requestBody.params = params;
-    }
-    
-    const response = await fetch(CONFIG.CALENDAR_PROXY_URL, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
-        },
-        body: JSON.stringify(requestBody)
-    });
-    
-    // Handle session expired
-    if (response.status === 401) {
-        const errorData = await response.json();
-        if (errorData.error === 'SESSION_EXPIRED') {
-            console.log('🔐 Session expired, showing sign-in...');
-            // Clear session and show auth
-            if (typeof clearSession === 'function') {
-                clearSession();
-            }
-            localStorage.removeItem('diaryAnalyzerSession');
-            showSection('auth');
-            throw new Error('Your session has expired. Please sign in again.');
-        }
-    }
-    
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-        throw new Error(errorData.message || `API error: ${response.status}`);
-    }
-    
-    return response.json();
-}
-
 // Configuration is loaded from config.js
 // CONFIG will be available globally from config.js
 if (typeof CONFIG === 'undefined') {
@@ -677,30 +608,21 @@ async function fetchWithTokenRefresh(url, options = {}, retryCount = 0) {
 async function fetchGoogleCalendarEvents(accessToken) {
     try {
         console.log('🔍 Fetching calendar list...');
+        console.log('🔑 Using access token (length):', accessToken ? accessToken.length : 0);
         
-        let calendarList;
-        
-        // Use backend proxy if available (supports refresh tokens)
-        if (shouldUseBackendProxy()) {
-            console.log('📡 Using backend proxy for API calls...');
-            calendarList = await fetchViaBackendProxy('users/me/calendarList');
-        } else {
-            console.log('🔑 Using direct API calls with access token (length):', accessToken ? accessToken.length : 0);
-            
-            // Get calendar list with automatic token refresh
-            const calendarListResponse = await fetchWithTokenRefresh(
-                'https://www.googleapis.com/calendar/v3/users/me/calendarList'
-            );
+        // Get calendar list with automatic token refresh on 401
+        const calendarListResponse = await fetchWithTokenRefresh(
+            'https://www.googleapis.com/calendar/v3/users/me/calendarList'
+        );
 
-            if (!calendarListResponse.ok) {
-                if (calendarListResponse.status === 401) {
-                    throw new Error(`401 Unauthorized: Token expired and refresh failed. Please sign in again.`);
-                }
-                throw new Error(`Failed to fetch calendars: ${calendarListResponse.status}`);
+        if (!calendarListResponse.ok) {
+            if (calendarListResponse.status === 401) {
+                throw new Error('Session expired. Please sign in again.');
             }
-
-            calendarList = await calendarListResponse.json();
+            throw new Error(`Failed to fetch calendars: ${calendarListResponse.status}`);
         }
+
+        const calendarList = await calendarListResponse.json();
         console.log('📅 Available calendars:', calendarList.items?.map(cal => cal.summary));
 
         // Filter for relevant calendars (primary + diary calendars)
@@ -726,58 +648,28 @@ async function fetchGoogleCalendarEvents(accessToken) {
 
         for (const calendar of relevantCalendars) {
             console.log(`📅 Fetching events from: ${calendar.summary}`);
-            console.log(`📅 Calendar ID: ${calendar.id}`);
 
-            try {
-                let data;
-                
-                if (shouldUseBackendProxy()) {
-                    // Use backend proxy
-                    data = await fetchViaBackendProxy(
-                        `calendars/${encodeURIComponent(calendar.id)}/events`,
-                        'GET',
-                        null,
-                        {
-                            timeMin: timeMin.toISOString(),
-                            timeMax: timeMax.toISOString(),
-                            singleEvents: 'true',
-                            orderBy: 'startTime',
-                            maxResults: '2500'
-                        }
-                    );
-                } else {
-                    // Use direct API call
-                    const apiUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events?` +
-                        `timeMin=${timeMin.toISOString()}&` +
-                        `timeMax=${timeMax.toISOString()}&` +
-                        `singleEvents=true&` +
-                        `orderBy=startTime&` +
-                        `maxResults=2500`;
-                    
-                    console.log(`📅 API URL: ${apiUrl}`);
+            const apiUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events?` +
+                `timeMin=${timeMin.toISOString()}&` +
+                `timeMax=${timeMax.toISOString()}&` +
+                `singleEvents=true&` +
+                `orderBy=startTime&` +
+                `maxResults=2500`;
 
-                    const response = await fetchWithTokenRefresh(apiUrl);
+            const response = await fetchWithTokenRefresh(apiUrl);
 
-                    if (!response.ok) {
-                        console.warn(`⚠️ Failed to fetch events from ${calendar.summary}: ${response.status}`);
-                        continue;
-                    }
-                    
-                    data = await response.json();
-                }
-                
+            if (response.ok) {
+                const data = await response.json();
                 const events = data.items || [];
                 console.log(`📅 Found ${events.length} events in ${calendar.summary}`);
 
-                // Add calendar name to each event for reference
                 events.forEach(event => {
                     event.calendarName = calendar.summary;
                 });
 
                 allEvents = allEvents.concat(events);
-                
-            } catch (error) {
-                console.warn(`⚠️ Failed to fetch events from ${calendar.summary}:`, error.message);
+            } else {
+                console.warn(`⚠️ Failed to fetch events from ${calendar.summary}: ${response.status}`);
             }
         }
 
@@ -2540,124 +2432,67 @@ function closeLogModal() {
 }
 
 async function getLastEventEndTime() {
-    console.log('🔍 getLastEventEndTime called:');
+    console.log('🔍 getLastEventEndTime called');
     
     const accessToken = getAccessToken();
-    if (!accessToken && !shouldUseBackendProxy()) {
+    if (!accessToken) {
         console.log('  - No access token available');
         return null;
     }
     
     try {
-        let calendarList;
+        const calendarListResponse = await fetchWithTokenRefresh(
+            'https://www.googleapis.com/calendar/v3/users/me/calendarList'
+        );
         
-        // Get calendars first
-        if (shouldUseBackendProxy()) {
-            calendarList = await fetchViaBackendProxy('users/me/calendarList');
-        } else {
-            const calendarListResponse = await fetchWithTokenRefresh('https://www.googleapis.com/calendar/v3/users/me/calendarList');
-            
-            if (!calendarListResponse.ok) {
-                console.log('  - Failed to fetch calendar list');
-                return null;
-            }
-            
-            calendarList = await calendarListResponse.json();
+        if (!calendarListResponse.ok) {
+            console.log('  - Failed to fetch calendar list');
+            return null;
         }
         
+        const calendarList = await calendarListResponse.json();
         const relevantCalendars = calendarList.items?.filter(calendar =>
             calendar.id === 'primary' ||
             calendar.summary?.toLowerCase().includes('diary') ||
             calendar.summary?.toLowerCase().includes('actual')
         ) || [];
         
-        console.log('  - Relevant calendars for last event search:', relevantCalendars.map(cal => cal.summary));
-        
-        // Look at the past week for events
         const now = new Date();
         const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        
-        console.log('  - Searching from:', oneWeekAgo.toISOString(), 'to:', now.toISOString());
         
         let allRecentEvents = [];
         
         for (const calendar of relevantCalendars) {
-            console.log(`  - Fetching events from: ${calendar.summary}`);
+            const apiUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events?` +
+                `timeMin=${oneWeekAgo.toISOString()}&` +
+                `timeMax=${now.toISOString()}&` +
+                `singleEvents=true&` +
+                `orderBy=startTime&` +
+                `maxResults=2500`;
             
-            try {
-                let data;
-                
-                if (shouldUseBackendProxy()) {
-                    data = await fetchViaBackendProxy(
-                        `calendars/${encodeURIComponent(calendar.id)}/events`,
-                        'GET',
-                        null,
-                        {
-                            timeMin: oneWeekAgo.toISOString(),
-                            timeMax: now.toISOString(),
-                            singleEvents: 'true',
-                            orderBy: 'startTime',
-                            maxResults: '2500'
-                        }
-                    );
-                } else {
-                    const apiUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events?` +
-                        `timeMin=${oneWeekAgo.toISOString()}&` +
-                        `timeMax=${now.toISOString()}&` +
-                        `singleEvents=true&` +
-                        `orderBy=startTime&` +
-                        `maxResults=2500`;
-                    
-                    const response = await fetchWithTokenRefresh(apiUrl);
-                    
-                    if (!response.ok) {
-                        console.log(`  - Failed to fetch from ${calendar.summary}: ${response.status}`);
-                        continue;
-                    }
-                    
-                    data = await response.json();
-                }
-                
+            const response = await fetchWithTokenRefresh(apiUrl);
+            
+            if (response.ok) {
+                const data = await response.json();
                 const events = data.items || [];
-                events.forEach(event => {
-                    event.calendarName = calendar.summary;
-                });
+                events.forEach(event => event.calendarName = calendar.summary);
                 allRecentEvents = allRecentEvents.concat(events);
-                console.log(`  - Found ${events.length} events in ${calendar.summary}`);
-                
-            } catch (error) {
-                console.log(`  - Failed to fetch from ${calendar.summary}:`, error.message);
             }
         }
         
-        console.log(`  - Total events found in past week: ${allRecentEvents.length}`);
+        if (allRecentEvents.length === 0) return null;
         
-        if (allRecentEvents.length === 0) {
-            console.log('  - No events found in past week, returning null');
-            return null;
-        }
+        const timedEvents = allRecentEvents.filter(event => event.end?.dateTime);
+        if (timedEvents.length === 0) return null;
         
-        // Find the most recent event by end time
-        const timedEvents = allRecentEvents.filter(event => event.end && event.end.dateTime);
-        console.log('  - Events with end.dateTime:', timedEvents.length);
+        const sortedEvents = timedEvents.sort((a, b) => 
+            new Date(b.end.dateTime) - new Date(a.end.dateTime)
+        );
         
-        if (timedEvents.length === 0) {
-            console.log('  - No timed events found, returning null');
-            return null;
-        }
-        
-        const sortedEvents = timedEvents.sort((a, b) => new Date(b.end.dateTime) - new Date(a.end.dateTime));
-        const lastEvent = sortedEvents[0];
-        const lastEventEndTime = new Date(lastEvent.end.dateTime);
-        
-        console.log('  - Last event:', lastEvent.summary);
-        console.log('  - Last event end time:', lastEvent.end.dateTime);
-        console.log('  - Returning:', lastEventEndTime.toLocaleString());
-        
-        return lastEventEndTime;
+        return new Date(sortedEvents[0].end.dateTime);
         
     } catch (error) {
-        console.error('  - Error in getLastEventEndTime:', error);
+        console.error('Error in getLastEventEndTime:', error);
         return null;
     }
 }
@@ -2757,11 +2592,10 @@ async function handleHighlightSubmit(event) {
 
 async function createCalendarEvent(eventData) {
     const accessToken = getAccessToken();
-    if (!accessToken && !shouldUseBackendProxy()) {
+    if (!accessToken) {
         throw new Error('No access token available. Please sign in again.');
     }
     
-    // Convert datetime-local to ISO string
     const startDateTime = new Date(eventData.start).toISOString();
     const endDateTime = new Date(eventData.end).toISOString();
     
@@ -2778,22 +2612,17 @@ async function createCalendarEvent(eventData) {
         }
     };
     
-    console.log('📅 Creating event with payload:', eventPayload);
+    console.log('📅 Creating event:', eventPayload.summary);
     
-    let calendarList;
+    const calendarListResponse = await fetchWithTokenRefresh(
+        'https://www.googleapis.com/calendar/v3/users/me/calendarList'
+    );
     
-    // Get the actual calendar ID for the selected calendar
-    if (shouldUseBackendProxy()) {
-        calendarList = await fetchViaBackendProxy('users/me/calendarList');
-    } else {
-        const calendarListResponse = await fetchWithTokenRefresh('https://www.googleapis.com/calendar/v3/users/me/calendarList');
-        
-        if (!calendarListResponse.ok) {
-            throw new Error('Failed to fetch calendar list');
-        }
-        
-        calendarList = await calendarListResponse.json();
+    if (!calendarListResponse.ok) {
+        throw new Error('Failed to fetch calendar list');
     }
+    
+    const calendarList = await calendarListResponse.json();
     
     // Try exact match first
     let selectedCalendar = calendarList.items?.find(cal => cal.summary === eventData.calendar);
@@ -2824,40 +2653,22 @@ async function createCalendarEvent(eventData) {
     }
     
     console.log('📅 Creating event in calendar:', targetCalendar);
-    console.log('📅 Event title:', eventPayload.summary);
     
-    let result;
-    
-    if (shouldUseBackendProxy()) {
-        result = await fetchViaBackendProxy(
-            `calendars/${encodeURIComponent(targetCalendar)}/events`,
-            'POST',
-            eventPayload
-        );
-    } else {
-        const response = await fetchWithTokenRefresh(
-            `https://www.googleapis.com/calendar/v3/calendars/${targetCalendar}/events`,
-            {
-                method: 'POST',
-                body: JSON.stringify(eventPayload)
-            }
-        );
-        
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(`Failed to create event: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+    const response = await fetchWithTokenRefresh(
+        `https://www.googleapis.com/calendar/v3/calendars/${targetCalendar}/events`,
+        {
+            method: 'POST',
+            body: JSON.stringify(eventPayload)
         }
-        
-        result = await response.json();
+    );
+    
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Failed to create event: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
     }
     
-    console.log('✅ Event created successfully!');
-    console.log('📅 Event ID:', result.id);
-    console.log('📅 Event Title:', result.summary);
-    console.log('📅 Event Start:', result.start.dateTime);
-    console.log('📅 Event End:', result.end.dateTime);
-    console.log('📅 Calendar ID:', result.organizer?.email || 'primary');
-    console.log('📅 Full Event Data:', result);
+    const result = await response.json();
+    console.log('✅ Event created:', result.summary);
     return result;
 }
 
@@ -2865,13 +2676,12 @@ async function createCalendarEvent(eventData) {
 function signOut() {
     console.log('🚪 Signing out...');
     
-    // Clear stored tokens and session (all formats)
+    // Clear all stored tokens
+    localStorage.removeItem('diaryAnalyzerToken');
     localStorage.removeItem('googleToken');
     localStorage.removeItem('googleTokenData');
-    localStorage.removeItem('diaryAnalyzerSession');
     window.globalAccessToken = null;
     window.accessToken = null;
-    window.currentUserId = null;
     
     // Hide sign out button
     hideSignOutButton();
@@ -2879,12 +2689,12 @@ function signOut() {
     // Show auth section
     showSection('auth');
     
-    // Re-render sign-in button if the function exists
+    // Re-render sign-in button if available
     if (typeof renderSignInButton === 'function') {
         renderSignInButton();
     }
     
-    console.log('✅ Signed out successfully');
+    console.log('✅ Signed out');
 }
 
 // Show sign out button
@@ -2969,89 +2779,48 @@ async function generateRandomRecap() {
     
     try {
         const accessToken = getAccessToken();
-        if (!accessToken && !shouldUseBackendProxy()) {
+        if (!accessToken) {
             throw new Error('No access token available. Please sign in again.');
         }
         
-        // Calculate date range
         const endDate = new Date();
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - lookbackDays);
         
-        console.log(`🔍 Searching for random day between ${startDate.toLocaleDateString()} and ${endDate.toLocaleDateString()}`);
+        console.log(`🔍 Searching for random day in last ${lookbackDays} days`);
         
-        let calendarList;
+        const calendarListResponse = await fetchWithTokenRefresh(
+            'https://www.googleapis.com/calendar/v3/users/me/calendarList'
+        );
         
-        // Get calendar list
-        if (shouldUseBackendProxy()) {
-            calendarList = await fetchViaBackendProxy('users/me/calendarList');
-        } else {
-            const calendarListResponse = await fetchWithTokenRefresh('https://www.googleapis.com/calendar/v3/users/me/calendarList');
-            
-            if (!calendarListResponse.ok) {
-                throw new Error('Failed to fetch calendar list');
-            }
-            
-            calendarList = await calendarListResponse.json();
+        if (!calendarListResponse.ok) {
+            throw new Error('Failed to fetch calendar list');
         }
         
+        const calendarList = await calendarListResponse.json();
         const relevantCalendars = calendarList.items?.filter(calendar =>
             calendar.id === 'primary' ||
             calendar.summary?.toLowerCase().includes('diary') ||
             calendar.summary?.toLowerCase().includes('actual')
         ) || [];
         
-        console.log('📅 Relevant calendars:', relevantCalendars.map(cal => cal.summary));
-        
-        // Fetch events from all relevant calendars
         let allEvents = [];
         
         for (const calendar of relevantCalendars) {
-            console.log(`📅 Fetching events from: ${calendar.summary}`);
+            const apiUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events?` +
+                `timeMin=${startDate.toISOString()}&` +
+                `timeMax=${endDate.toISOString()}&` +
+                `singleEvents=true&` +
+                `orderBy=startTime&` +
+                `maxResults=2500`;
             
-            try {
-                let data;
-                
-                if (shouldUseBackendProxy()) {
-                    data = await fetchViaBackendProxy(
-                        `calendars/${encodeURIComponent(calendar.id)}/events`,
-                        'GET',
-                        null,
-                        {
-                            timeMin: startDate.toISOString(),
-                            timeMax: endDate.toISOString(),
-                            singleEvents: 'true',
-                            orderBy: 'startTime',
-                            maxResults: '2500'
-                        }
-                    );
-                } else {
-                    const apiUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events?` +
-                        `timeMin=${startDate.toISOString()}&` +
-                        `timeMax=${endDate.toISOString()}&` +
-                        `singleEvents=true&` +
-                        `orderBy=startTime&` +
-                        `maxResults=2500`;
-                    
-                    const response = await fetchWithTokenRefresh(apiUrl);
-                    
-                    if (!response.ok) {
-                        console.warn(`⚠️ Failed to fetch events from ${calendar.summary}: ${response.status}`);
-                        continue;
-                    }
-                    
-                    data = await response.json();
-                }
-                
+            const response = await fetchWithTokenRefresh(apiUrl);
+            
+            if (response.ok) {
+                const data = await response.json();
                 const events = data.items || [];
-                events.forEach(event => {
-                    event.calendarName = calendar.summary;
-                });
+                events.forEach(event => event.calendarName = calendar.summary);
                 allEvents = allEvents.concat(events);
-                console.log(`📅 Found ${events.length} events in ${calendar.summary}`);
-                
-            } catch (error) {
-                console.warn(`⚠️ Failed to fetch events from ${calendar.summary}:`, error.message);
             }
         }
         
@@ -3891,27 +3660,17 @@ let highlightsCalendarId = null;
 // Create or find the highlights calendar
 async function ensureHighlightsCalendar() {
     const accessToken = getAccessToken();
-    if (!accessToken && !shouldUseBackendProxy()) {
+    if (!accessToken) {
         throw new Error('No access token available');
     }
 
     try {
-        let calendarList;
-        
-        // First, try to find existing highlights calendar
-        if (shouldUseBackendProxy()) {
-            calendarList = await fetchViaBackendProxy('users/me/calendarList');
-        } else {
-            const calendarListResponse = await fetchWithTokenRefresh(
-                'https://www.googleapis.com/calendar/v3/users/me/calendarList'
-            );
+        const calendarListResponse = await fetchWithTokenRefresh(
+            'https://www.googleapis.com/calendar/v3/users/me/calendarList'
+        );
 
-            if (calendarListResponse.ok) {
-                calendarList = await calendarListResponse.json();
-            }
-        }
-        
-        if (calendarList) {
+        if (calendarListResponse.ok) {
+            const calendarList = await calendarListResponse.json();
             const existingCalendar = calendarList.items?.find(cal => 
                 cal.summary === 'Highlights & Milestones' || 
                 cal.summary === 'Diary Highlights' ||
@@ -3920,46 +3679,37 @@ async function ensureHighlightsCalendar() {
             
             if (existingCalendar) {
                 highlightsCalendarId = existingCalendar.id;
-                console.log('✅ Found existing highlights calendar:', existingCalendar.summary);
+                console.log('✅ Found highlights calendar');
                 return highlightsCalendarId;
             }
         }
 
         // Create new highlights calendar
-        console.log('📅 Creating new highlights calendar...');
+        console.log('📅 Creating highlights calendar...');
         
-        const calendarPayload = {
-            summary: 'Highlights & Milestones',
-            description: 'Personal highlights, milestones, and achievements tracked through Diary Analyzer',
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        };
-        
-        let newCalendar;
-        
-        if (shouldUseBackendProxy()) {
-            newCalendar = await fetchViaBackendProxy('calendars', 'POST', calendarPayload);
-        } else {
-            const createCalendarResponse = await fetchWithTokenRefresh(
-                'https://www.googleapis.com/calendar/v3/calendars',
-                {
-                    method: 'POST',
-                    body: JSON.stringify(calendarPayload)
-                }
-            );
-
-            if (!createCalendarResponse.ok) {
-                throw new Error(`Failed to create calendar: ${createCalendarResponse.status}`);
+        const createCalendarResponse = await fetchWithTokenRefresh(
+            'https://www.googleapis.com/calendar/v3/calendars',
+            {
+                method: 'POST',
+                body: JSON.stringify({
+                    summary: 'Highlights & Milestones',
+                    description: 'Personal highlights and milestones from Diary Analyzer',
+                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                })
             }
-            
-            newCalendar = await createCalendarResponse.json();
+        );
+
+        if (!createCalendarResponse.ok) {
+            throw new Error(`Failed to create calendar: ${createCalendarResponse.status}`);
         }
         
+        const newCalendar = await createCalendarResponse.json();
         highlightsCalendarId = newCalendar.id;
-        console.log('✅ Created new highlights calendar:', newCalendar.summary);
+        console.log('✅ Created highlights calendar');
         return highlightsCalendarId;
 
     } catch (error) {
-        console.error('❌ Error ensuring highlights calendar:', error);
+        console.error('❌ Error with highlights calendar:', error);
         throw error;
     }
 }
@@ -3967,61 +3717,43 @@ async function ensureHighlightsCalendar() {
 // Save highlight to Google Calendar
 async function saveHighlightToGoogleCalendar(highlight) {
     const accessToken = getAccessToken();
-    if (!accessToken && !shouldUseBackendProxy()) {
+    if (!accessToken) {
         throw new Error('No access token available');
     }
 
     try {
-        // Ensure we have a highlights calendar
         if (!highlightsCalendarId) {
             await ensureHighlightsCalendar();
         }
 
-        // Create event in Google Calendar as a whole day event
-        const eventDate = new Date(highlight.date);
-        const dateString = eventDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+        const dateString = new Date(highlight.date).toISOString().split('T')[0];
 
         const event = {
             summary: `⭐ ${highlight.title}`,
             description: `${highlight.description}\n\nType: ${highlight.type}\nCreated: ${highlight.createdAt}`,
-            start: {
-                date: dateString
-            },
-            end: {
-                date: dateString
-            },
+            start: { date: dateString },
+            end: { date: dateString },
             colorId: getColorIdForType(highlight.type)
         };
 
-        let createdEvent;
-        
-        if (shouldUseBackendProxy()) {
-            createdEvent = await fetchViaBackendProxy(
-                `calendars/${encodeURIComponent(highlightsCalendarId)}/events`,
-                'POST',
-                event
-            );
-        } else {
-            const createEventResponse = await fetchWithTokenRefresh(
-                `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(highlightsCalendarId)}/events`,
-                {
-                    method: 'POST',
-                    body: JSON.stringify(event)
-                }
-            );
-
-            if (!createEventResponse.ok) {
-                throw new Error(`Failed to create event: ${createEventResponse.status}`);
+        const createEventResponse = await fetchWithTokenRefresh(
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(highlightsCalendarId)}/events`,
+            {
+                method: 'POST',
+                body: JSON.stringify(event)
             }
-            
-            createdEvent = await createEventResponse.json();
+        );
+
+        if (!createEventResponse.ok) {
+            throw new Error(`Failed to create event: ${createEventResponse.status}`);
         }
         
-        console.log('✅ Event created in Google Calendar:', createdEvent.summary);
+        const createdEvent = await createEventResponse.json();
+        console.log('✅ Highlight saved to calendar');
         return createdEvent;
 
     } catch (error) {
-        console.error('❌ Error saving highlight to Google Calendar:', error);
+        console.error('❌ Error saving highlight:', error);
         throw error;
     }
 }

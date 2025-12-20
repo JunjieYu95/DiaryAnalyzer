@@ -300,13 +300,23 @@
     <!-- config.js must load BEFORE app.js, so no defer -->
     <script src="config.js"></script>
     
-    <!-- Google OAuth Setup - Authorization Code Flow with Backend -->
+    <!-- Google OAuth Setup - Client-Side Token Flow with Silent Refresh -->
     <script>
         // ============================================
-        // BACKEND-BASED OAUTH WITH REFRESH TOKENS
+        // CLIENT-SIDE OAUTH WITH SILENT TOKEN REFRESH
         // ============================================
+        // 
+        // How this works:
+        // 1. Access tokens are stored locally with expiration time
+        // 2. When token expires, we attempt "silent refresh" via Google
+        // 3. Silent refresh works if user is still logged into Google
+        // 4. If silent refresh fails, user clicks sign-in (just account picker, no password)
+        //
         
-        // Helper function to update loading message with details
+        let tokenClient = null;
+        let tokenRefreshTimer = null;
+        
+        // Helper function to update loading message
         function updateLoadingMessage(mainMessage, details = '') {
             const loadingMsg = document.getElementById('loadingMessage');
             const loadingDetails = document.getElementById('loadingDetails');
@@ -315,265 +325,249 @@
             console.log('📢', mainMessage, details ? `(${details})` : '');
         }
         
-        // Get stored user session
-        function getStoredSession() {
+        // ============================================
+        // TOKEN STORAGE
+        // ============================================
+        
+        function storeToken(accessToken, expiresIn) {
+            const expiresAt = Date.now() + (expiresIn * 1000);
+            const tokenData = {
+                token: accessToken,
+                expiresAt: expiresAt,
+                storedAt: Date.now()
+            };
+            localStorage.setItem('diaryAnalyzerToken', JSON.stringify(tokenData));
+            console.log('💾 Token stored, expires:', new Date(expiresAt).toLocaleString());
+            
+            // Schedule proactive refresh
+            scheduleTokenRefresh(expiresIn);
+            
+            return tokenData;
+        }
+        
+        function getStoredToken() {
             try {
-                const data = localStorage.getItem('diaryAnalyzerSession');
+                const data = localStorage.getItem('diaryAnalyzerToken');
                 if (data) {
                     return JSON.parse(data);
                 }
             } catch (e) {
-                console.error('❌ Error parsing session data:', e);
+                console.error('Error reading stored token:', e);
             }
             return null;
         }
         
-        // Store user session
-        function storeSession(sessionData) {
-            localStorage.setItem('diaryAnalyzerSession', JSON.stringify(sessionData));
-            console.log('💾 Session stored for user:', sessionData.user?.email);
+        function clearStoredToken() {
+            localStorage.removeItem('diaryAnalyzerToken');
+            localStorage.removeItem('googleToken'); // Legacy
+            localStorage.removeItem('googleTokenData'); // Legacy
+            window.accessToken = null;
+            window.globalAccessToken = null;
+            console.log('🗑️ Token cleared');
         }
         
-        // Clear session
-        function clearSession() {
-            localStorage.removeItem('diaryAnalyzerSession');
-            localStorage.removeItem('googleToken');
-            localStorage.removeItem('googleTokenData');
-            console.log('🗑️ Session cleared');
+        function isTokenValid() {
+            const tokenData = getStoredToken();
+            if (!tokenData || !tokenData.expiresAt) return false;
+            // Valid if more than 5 minutes remaining
+            return Date.now() < (tokenData.expiresAt - 5 * 60 * 1000);
         }
         
-        // Check if session is valid (has user_id for backend calls)
-        function isSessionValid() {
-            const session = getStoredSession();
-            return session && session.user_id && session.access_token;
+        function isTokenExpired() {
+            const tokenData = getStoredToken();
+            if (!tokenData || !tokenData.expiresAt) return true;
+            return Date.now() > tokenData.expiresAt;
         }
         
         // ============================================
-        // GOOGLE AUTH - AUTHORIZATION CODE FLOW
+        // TOKEN REFRESH
         // ============================================
         
-        // Build the Google OAuth URL for authorization code flow
-        function buildGoogleAuthUrl() {
-            const params = new URLSearchParams({
-                client_id: CONFIG.GOOGLE_CLIENT_ID,
-                redirect_uri: window.location.origin + window.location.pathname,
-                response_type: 'code',
-                scope: CONFIG.GOOGLE_SCOPES.join(' '),
-                access_type: 'offline',  // This requests a refresh token!
-                prompt: 'consent',        // Always show consent to get refresh token
-                state: 'diary_analyzer_auth'
-            });
+        function scheduleTokenRefresh(expiresIn) {
+            if (tokenRefreshTimer) {
+                clearTimeout(tokenRefreshTimer);
+            }
             
-            return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+            // Refresh 5 minutes before expiration
+            const refreshIn = Math.max((expiresIn - 300) * 1000, 60000);
+            console.log('⏰ Token refresh scheduled in', Math.round(refreshIn / 60000), 'minutes');
+            
+            tokenRefreshTimer = setTimeout(() => {
+                console.log('🔄 Proactive token refresh triggered');
+                silentTokenRefresh();
+            }, refreshIn);
         }
         
-        // Handle the OAuth callback (when Google redirects back with auth code)
-        async function handleOAuthCallback() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const code = urlParams.get('code');
-            const state = urlParams.get('state');
-            const error = urlParams.get('error');
+        function silentTokenRefresh(onSuccess, onFailure) {
+            console.log('🔄 Attempting silent token refresh...');
             
-            // Clear URL parameters
-            if (code || error) {
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }
-            
-            if (error) {
-                console.error('❌ OAuth error:', error);
-                document.getElementById('errorMessage').textContent = `Authentication failed: ${error}`;
-                document.getElementById('authSection').classList.add('hidden');
-                document.getElementById('errorSection').classList.remove('hidden');
-                return false;
-            }
-            
-            if (code && state === 'diary_analyzer_auth') {
-                console.log('🔑 Got authorization code, exchanging for tokens...');
-                
-                document.getElementById('authSection').classList.add('hidden');
-                document.getElementById('loadingSection').classList.remove('hidden');
-                updateLoadingMessage('Completing sign-in...', 'Exchanging authorization code...');
-                
-                try {
-                    // Exchange code for tokens via backend
-                    const response = await fetch(CONFIG.AUTH_FUNCTION_URL, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
-                        },
-                        body: JSON.stringify({
-                            action: 'exchange',
-                            code: code,
-                            redirect_uri: window.location.origin + window.location.pathname
-                        })
-                    });
-                    
-                    const result = await response.json();
-                    
-                    if (!result.success) {
-                        throw new Error(result.error || 'Token exchange failed');
-                    }
-                    
-                    console.log('✅ Token exchange successful!');
-                    console.log('👤 User:', result.user?.email);
-                    console.log('🔄 Has refresh token:', result.has_refresh_token);
-                    
-                    // Store session
-                    const session = {
-                        user_id: result.user.id,
-                        access_token: result.access_token,
-                        expires_at: result.expires_at,
-                        user: result.user,
-                        has_refresh_token: result.has_refresh_token
-                    };
-                    storeSession(session);
-                    
-                    // Also set for backward compatibility
-                    window.accessToken = result.access_token;
-                    window.globalAccessToken = result.access_token;
-                    window.currentUserId = result.user.id;
-                    
-                    updateLoadingMessage('Sign-in successful!', 'Loading calendar data...');
-                    return true;
-                    
-                } catch (error) {
-                    console.error('❌ Token exchange failed:', error);
-                    document.getElementById('errorMessage').textContent = `Sign-in failed: ${error.message}`;
-                    document.getElementById('loadingSection').classList.add('hidden');
-                    document.getElementById('errorSection').classList.remove('hidden');
-                    return false;
-                }
-            }
-            
-            return false;
-        }
-        
-        // Refresh token via backend
-        async function refreshTokenViaBackend(userId) {
-            console.log('🔄 Refreshing token via backend...');
-            
-            try {
-                const response = await fetch(CONFIG.AUTH_FUNCTION_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
-                    },
-                    body: JSON.stringify({
-                        action: 'refresh',
-                        user_id: userId
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (!result.success) {
-                    throw new Error(result.error || 'Token refresh failed');
-                }
-                
-                console.log('✅ Token refreshed via backend!');
-                
-                // Update stored session
-                const session = getStoredSession();
-                if (session) {
-                    session.access_token = result.access_token;
-                    session.expires_at = result.expires_at;
-                    storeSession(session);
-                }
-                
-                // Update global variables
-                window.accessToken = result.access_token;
-                window.globalAccessToken = result.access_token;
-                
-                return result.access_token;
-                
-            } catch (error) {
-                console.error('❌ Backend token refresh failed:', error);
-                throw error;
-            }
-        }
-        
-        // Expose refresh function globally
-        window.refreshGoogleToken = async function() {
-            const session = getStoredSession();
-            if (!session || !session.user_id) {
-                throw new Error('No session found. Please sign in again.');
-            }
-            return refreshTokenViaBackend(session.user_id);
-        };
-        
-        // Get current user ID
-        window.getCurrentUserId = function() {
-            const session = getStoredSession();
-            return session?.user_id || window.currentUserId;
-        };
-        
-        // ============================================
-        // INITIALIZATION
-        // ============================================
-        
-        async function initializeAuth() {
-            console.log('🔧 Initializing authentication...');
-            console.log('🔧 Using backend proxy:', CONFIG.USE_BACKEND_PROXY);
-            
-            // First, check if this is an OAuth callback
-            const wasCallback = await handleOAuthCallback();
-            
-            if (wasCallback) {
-                // Successfully authenticated via callback, load data
-                await loadAppData();
+            if (!tokenClient) {
+                console.error('Token client not initialized');
+                if (onFailure) onFailure(new Error('Token client not initialized'));
                 return;
             }
             
-            // Check for existing session
-            const session = getStoredSession();
+            // Store callbacks
+            window._refreshCallbacks = { onSuccess, onFailure };
+            window._isRefreshAttempt = true;
             
-            if (session && session.user_id && session.access_token) {
-                console.log('♻️ Found existing session for:', session.user?.email);
-                
-                // Set global variables
-                window.accessToken = session.access_token;
-                window.globalAccessToken = session.access_token;
-                window.currentUserId = session.user_id;
-                
-                // Check if token is expired
-                const expiresAt = new Date(session.expires_at).getTime();
-                const isExpired = Date.now() > expiresAt;
-                
-                if (isExpired && session.has_refresh_token) {
-                    console.log('⏰ Token expired, refreshing via backend...');
-                    document.getElementById('authSection').classList.add('hidden');
-                    document.getElementById('loadingSection').classList.remove('hidden');
-                    updateLoadingMessage('Refreshing credentials...', 'Please wait...');
-                    
-                    try {
-                        await refreshTokenViaBackend(session.user_id);
-                        console.log('✅ Token refreshed successfully!');
-                        await loadAppData();
-                        return;
-                    } catch (error) {
-                        console.error('❌ Token refresh failed:', error);
-                        clearSession();
-                        // Fall through to show sign-in
-                    }
-                } else if (!isExpired) {
-                    // Token is still valid
-                    console.log('✅ Session is valid, loading app...');
-                    document.getElementById('authSection').classList.add('hidden');
-                    document.getElementById('loadingSection').classList.remove('hidden');
-                    updateLoadingMessage('Loading...', 'Using stored credentials...');
-                    await loadAppData();
-                    return;
-                }
+            try {
+                // Empty prompt = silent refresh (no popup if user already consented)
+                tokenClient.requestAccessToken({ prompt: '' });
+            } catch (error) {
+                console.error('Silent refresh error:', error);
+                window._isRefreshAttempt = false;
+                if (onFailure) onFailure(error);
             }
-            
-            // No valid session, show sign-in button
-            console.log('🔐 No valid session, showing sign-in button');
-            renderSignInButton();
         }
         
-        // Render the sign-in button
+        // Global refresh function for app.js to use
+        window.refreshGoogleToken = function() {
+            return new Promise((resolve, reject) => {
+                silentTokenRefresh(resolve, reject);
+            });
+        };
+        
+        // ============================================
+        // GOOGLE AUTH INITIALIZATION
+        // ============================================
+        
+        function initializeGoogleAuth() {
+            console.log('🔧 Initializing Google OAuth...');
+            
+            if (typeof google === 'undefined') {
+                console.log('⏳ Waiting for Google API...');
+                setTimeout(initializeGoogleAuth, 100);
+                return;
+            }
+            
+            console.log('✅ Google API loaded');
+            
+            // Initialize token client
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CONFIG.GOOGLE_CLIENT_ID,
+                scope: CONFIG.GOOGLE_SCOPES.join(' '),
+                callback: handleTokenResponse
+            });
+            
+            // Render sign-in button
+            renderSignInButton();
+            
+            // Check for existing valid token
+            checkExistingToken();
+        }
+        
+        function handleTokenResponse(response) {
+            console.log('🔐 Token response received');
+            
+            const isRefresh = window._isRefreshAttempt;
+            const callbacks = window._refreshCallbacks || {};
+            window._isRefreshAttempt = false;
+            window._refreshCallbacks = null;
+            
+            if (response.error) {
+                console.error('❌ OAuth error:', response.error);
+                
+                if (isRefresh) {
+                    // Silent refresh failed - this is expected if user logged out of Google
+                    console.log('⚠️ Silent refresh failed, user may need to sign in again');
+                    if (callbacks.onFailure) callbacks.onFailure(new Error(response.error));
+                    return;
+                }
+                
+                // Regular auth failed
+                document.getElementById('errorMessage').textContent = `Authentication failed: ${response.error}`;
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('errorSection').classList.remove('hidden');
+                return;
+            }
+            
+            if (response.access_token) {
+                console.log('✅ Got access token');
+                
+                // Store token
+                const expiresIn = response.expires_in || 3600;
+                storeToken(response.access_token, expiresIn);
+                
+                // Set global variables
+                window.accessToken = response.access_token;
+                window.globalAccessToken = response.access_token;
+                
+                if (isRefresh) {
+                    console.log('🔄 Silent refresh successful!');
+                    if (callbacks.onSuccess) callbacks.onSuccess(response.access_token);
+                    return;
+                }
+                
+                // Initial auth - load app
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('loadingSection').classList.remove('hidden');
+                updateLoadingMessage('Signed in!', 'Loading calendar data...');
+                
+                loadAppData();
+            }
+        }
+        
+        function checkExistingToken() {
+            const tokenData = getStoredToken();
+            
+            if (!tokenData || !tokenData.token) {
+                console.log('🔍 No stored token');
+                return;
+            }
+            
+            if (isTokenValid()) {
+                // Token still valid, use it
+                console.log('♻️ Using valid stored token');
+                window.accessToken = tokenData.token;
+                window.globalAccessToken = tokenData.token;
+                
+                // Schedule refresh
+                const remainingMs = tokenData.expiresAt - Date.now();
+                scheduleTokenRefresh(Math.floor(remainingMs / 1000));
+                
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('loadingSection').classList.remove('hidden');
+                updateLoadingMessage('Loading...', 'Using stored credentials');
+                
+                loadAppData();
+                
+            } else if (!isTokenExpired()) {
+                // Token expiring soon, try refresh
+                console.log('⚠️ Token expiring soon, refreshing...');
+                window.accessToken = tokenData.token;
+                window.globalAccessToken = tokenData.token;
+                
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('loadingSection').classList.remove('hidden');
+                updateLoadingMessage('Refreshing...', 'Updating credentials');
+                
+                silentTokenRefresh(
+                    () => loadAppData(),
+                    () => loadAppData() // Try with existing token anyway
+                );
+                
+            } else {
+                // Token expired, try silent refresh
+                console.log('⏰ Token expired, attempting silent refresh...');
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('loadingSection').classList.remove('hidden');
+                updateLoadingMessage('Signing in...', 'Please wait');
+                
+                silentTokenRefresh(
+                    (token) => {
+                        console.log('✅ Silent refresh worked!');
+                        loadAppData();
+                    },
+                    (error) => {
+                        console.log('⚠️ Silent refresh failed, showing sign-in');
+                        document.getElementById('loadingSection').classList.add('hidden');
+                        document.getElementById('authSection').classList.remove('hidden');
+                    }
+                );
+            }
+        }
+        
         function renderSignInButton() {
             const buttonDiv = document.getElementById("buttonDiv");
             buttonDiv.innerHTML = `
@@ -606,61 +600,40 @@
             `;
             
             document.getElementById("customGoogleBtn").addEventListener('click', () => {
-                console.log('🖱️ Sign-in button clicked, redirecting to Google...');
-                window.location.href = buildGoogleAuthUrl();
+                console.log('🖱️ Sign-in clicked');
+                // First sign-in needs consent, subsequent ones are silent
+                const tokenData = getStoredToken();
+                const prompt = tokenData ? '' : 'consent';
+                tokenClient.requestAccessToken({ prompt });
             });
-            
-            console.log('✅ Sign-in button rendered');
         }
         
-        // Load app data after authentication
-        async function loadAppData() {
-            const tryLoadCalendarData = (attempts = 0, maxAttempts = 10) => {
-                console.log(`🔄 Attempt ${attempts + 1}/${maxAttempts} to load calendar data...`);
-                
-                if (window.loadCalendarData && typeof window.loadCalendarData === 'function') {
-                    console.log('✅ Found loadCalendarData function, calling it...');
-                    updateLoadingMessage('Loading calendar data...', 'Fetching events...');
-                    try {
-                        window.loadCalendarData();
-                    } catch (error) {
-                        console.error('❌ Error calling loadCalendarData:', error);
-                        document.getElementById('errorMessage').textContent = `Failed to load calendar data: ${error.message}`;
-                        document.getElementById('loadingSection').classList.add('hidden');
-                        document.getElementById('errorSection').classList.remove('hidden');
-                    }
-                } else if (attempts < maxAttempts) {
-                    const nextAttempt = attempts + 1;
-                    const waitTime = 500;
-                    console.log(`⏳ loadCalendarData not ready yet, retrying in ${waitTime}ms...`);
-                    updateLoadingMessage('Loading...', `Initializing app... (${nextAttempt}/${maxAttempts})`);
-                    setTimeout(() => tryLoadCalendarData(nextAttempt, maxAttempts), waitTime);
+        function loadAppData() {
+            const tryLoad = (attempts = 0) => {
+                if (window.loadCalendarData) {
+                    updateLoadingMessage('Loading calendar...', 'Fetching events');
+                    window.loadCalendarData();
+                } else if (attempts < 10) {
+                    setTimeout(() => tryLoad(attempts + 1), 500);
                 } else {
-                    console.error('❌ Failed to load app.js after', maxAttempts, 'attempts');
-                    document.getElementById('errorMessage').textContent = 'Failed to load app. Please refresh the page.';
+                    document.getElementById('errorMessage').textContent = 'Failed to load app';
                     document.getElementById('loadingSection').classList.add('hidden');
                     document.getElementById('errorSection').classList.remove('hidden');
                 }
             };
-            
-            tryLoadCalendarData();
+            tryLoad();
         }
         
-        // Start initialization when page loads
-        window.onload = initializeAuth;
-        
-        // Also try when DOM is ready (backup)
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initializeAuth);
-        } else {
-            // DOM already ready, but wait a tick for config.js
-            setTimeout(initializeAuth, 100);
+        // Start on page load
+        window.onload = initializeGoogleAuth;
+        if (document.readyState !== 'loading') {
+            setTimeout(initializeGoogleAuth, 100);
         }
     </script>
     
     <!-- Load app.js WITHOUT defer so it's available when we need it -->
     <!-- Cache busting: add timestamp to force reload -->
-    <script src="app.js?v=20251220-backend-auth"></script>
+    <script src="app.js?v=20251220-silent-refresh"></script>
 </body>
 </html>
 <!-- Reverted to pre-mobile-framework version -->
