@@ -8,6 +8,9 @@ let allEvents = [];
 let currentYear = new Date().getFullYear();
 let highlightsData = JSON.parse(localStorage.getItem('highlightsData') || '[]');
 
+// Track if this is the initial app load (for showing Quick Log popup on startup)
+let isInitialLoad = true;
+
 // Add test highlights for debugging
 function addTestHighlights() {
     const testHighlights = [
@@ -544,6 +547,16 @@ window.loadCalendarData = async function loadCalendarData() {
         updateCurrentDateDisplay();
         showSignOutButton();
         showSection('content');
+        
+        // Show Quick Log popup on initial app load (default view)
+        if (isInitialLoad) {
+            isInitialLoad = false;
+            // Small delay to ensure UI is ready
+            setTimeout(() => {
+                console.log('📝 Opening Quick Log modal as default view...');
+                showLogModal();
+            }, 500);
+        }
         
     } catch (error) {
         console.error('❌ Error loading calendar data:', error);

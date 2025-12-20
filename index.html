@@ -25,6 +25,25 @@
     <link rel="icon" type="image/svg+xml" href="icons/icon16.svg">
     <link rel="apple-touch-icon" href="icons/icon48.svg">
     
+    <!-- PWA Manifest for standalone app experience -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- iOS PWA Meta Tags for standalone mode (no URL bar) -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Diary Analyzer">
+    
+    <!-- Android PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#667eea">
+    
+    <!-- Disable phone number detection -->
+    <meta name="format-detection" content="telephone=no">
+    
+    <!-- Full screen mode -->
+    <meta name="full-screen" content="yes">
+    <meta name="browsermode" content="application">
+    
     <!-- Preload critical resources -->
     <link rel="preload" href="styles.css" as="style">
     <link rel="preload" href="https://accounts.google.com/gsi/client" as="script">
@@ -628,6 +647,26 @@
         window.onload = initializeGoogleAuth;
         if (document.readyState !== 'loading') {
             setTimeout(initializeGoogleAuth, 100);
+        }
+        
+        // Register Service Worker for PWA functionality
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then((registration) => {
+                        console.log('📱 Service Worker registered:', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.log('📱 Service Worker registration failed:', error);
+                    });
+            });
+        }
+        
+        // Detect standalone mode and add class to body
+        if (window.matchMedia('(display-mode: standalone)').matches || 
+            window.navigator.standalone === true) {
+            document.body.classList.add('standalone-mode');
+            console.log('📱 Running in standalone PWA mode');
         }
     </script>
     
