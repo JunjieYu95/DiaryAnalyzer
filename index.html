@@ -83,9 +83,19 @@
 
             <!-- Loading Section -->
             <section id="loadingSection" class="loading-section hidden">
-                    <div class="loading-spinner"></div>
+                <div class="loading-spinner"></div>
                 <p id="loadingMessage">Loading your calendar data...</p>
                 <p id="loadingDetails" style="font-size: 0.85rem; color: #888; margin-top: 0.5rem;"></p>
+                <button id="cancelAuthBtn" onclick="cancelAuthAndShowSignIn()" style="
+                    margin-top: 1.5rem;
+                    padding: 0.5rem 1rem;
+                    background: transparent;
+                    border: 1px solid #ccc;
+                    border-radius: 4px;
+                    color: #666;
+                    cursor: pointer;
+                    font-size: 0.85rem;
+                ">Cancel and try again</button>
             </section>
 
             <!-- Error Section -->
@@ -341,7 +351,43 @@
             const loadingDetails = document.getElementById('loadingDetails');
             if (loadingMsg) loadingMsg.textContent = mainMessage;
             if (loadingDetails) loadingDetails.textContent = details;
-            console.log('📢', mainMessage, details ? `(${details})` : '');
+            const timestamp = new Date().toLocaleTimeString();
+            console.log(`📢 [${timestamp}]`, mainMessage, details ? `(${details})` : '');
+        }
+        
+        // Enhanced status tracking for debugging
+        let authStatusLog = [];
+        function logAuthStatus(status, details = '') {
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = { timestamp, status, details };
+            authStatusLog.push(entry);
+            console.log(`🔐 [${timestamp}] AUTH: ${status}`, details ? `- ${details}` : '');
+            
+            // Keep only last 20 entries
+            if (authStatusLog.length > 20) {
+                authStatusLog.shift();
+            }
+            
+            // Update loading details with status
+            const loadingDetails = document.getElementById('loadingDetails');
+            if (loadingDetails) {
+                loadingDetails.textContent = `${status}${details ? ': ' + details : ''}`;
+            }
+        }
+        
+        // Show auth debug info in error state
+        function showAuthDebugInfo(message) {
+            const errorMsgEl = document.getElementById('errorMessage');
+            if (errorMsgEl) {
+                const debugLog = authStatusLog.map(e => `[${e.timestamp}] ${e.status}: ${e.details}`).join('\n');
+                errorMsgEl.innerHTML = `
+                    <p>${message}</p>
+                    <details style="margin-top: 1rem; text-align: left;">
+                        <summary style="cursor: pointer; color: #666;">🔍 Debug Info (click to expand)</summary>
+                        <pre style="font-size: 0.75rem; background: #f5f5f5; padding: 0.5rem; border-radius: 4px; overflow-x: auto; white-space: pre-wrap;">${debugLog || 'No debug info available'}</pre>
+                    </details>
+                `;
+            }
         }
         
         // ============================================
@@ -356,7 +402,7 @@
                 storedAt: Date.now()
             };
             localStorage.setItem('diaryAnalyzerToken', JSON.stringify(tokenData));
-            console.log('💾 Token stored, expires:', new Date(expiresAt).toLocaleString());
+            logAuthStatus('Token stored', `Expires: ${new Date(expiresAt).toLocaleString()} (in ${Math.round(expiresIn/60)}min)`);
             
             // Schedule proactive refresh
             scheduleTokenRefresh(expiresIn);
@@ -382,7 +428,7 @@
             localStorage.removeItem('googleTokenData'); // Legacy
             window.accessToken = null;
             window.globalAccessToken = null;
-            console.log('🗑️ Token cleared');
+            logAuthStatus('Token cleared', 'All stored tokens removed');
         }
         
         function isTokenValid() {
@@ -418,10 +464,10 @@
         }
         
         function silentTokenRefresh(onSuccess, onFailure) {
-            console.log('🔄 Attempting silent token refresh...');
+            logAuthStatus('Silent refresh started', 'Attempting to refresh token without popup');
             
             if (!tokenClient) {
-                console.error('Token client not initialized');
+                logAuthStatus('Silent refresh failed', 'Token client not initialized');
                 if (onFailure) onFailure(new Error('Token client not initialized'));
                 return;
             }
@@ -430,11 +476,32 @@
             window._refreshCallbacks = { onSuccess, onFailure };
             window._isRefreshAttempt = true;
             
+            // Set a timeout - silent refresh should complete quickly
+            const REFRESH_TIMEOUT = 15000; // 15 seconds
+            logAuthStatus('Setting timeout', `${REFRESH_TIMEOUT/1000}s timeout for silent refresh`);
+            
+            window._refreshTimeoutId = setTimeout(() => {
+                if (window._isRefreshAttempt) {
+                    logAuthStatus('Silent refresh timed out', `No response after ${REFRESH_TIMEOUT/1000}s`);
+                    window._isRefreshAttempt = false;
+                    window._refreshCallbacks = null;
+                    
+                    // Show the sign-in button instead of leaving user stuck
+                    updateLoadingMessage('Sign-in required', 'Silent refresh timed out - please click the button below');
+                    document.getElementById('loadingSection').classList.add('hidden');
+                    document.getElementById('authSection').classList.remove('hidden');
+                    
+                    if (onFailure) onFailure(new Error('Silent refresh timed out'));
+                }
+            }, REFRESH_TIMEOUT);
+            
             try {
+                logAuthStatus('Requesting token', 'Calling Google OAuth with empty prompt');
                 // Empty prompt = silent refresh (no popup if user already consented)
                 tokenClient.requestAccessToken({ prompt: '' });
             } catch (error) {
-                console.error('Silent refresh error:', error);
+                logAuthStatus('Silent refresh error', error.message);
+                clearTimeout(window._refreshTimeoutId);
                 window._isRefreshAttempt = false;
                 if (onFailure) onFailure(error);
             }
@@ -452,22 +519,46 @@
         // ============================================
         
         function initializeGoogleAuth() {
-            console.log('🔧 Initializing Google OAuth...');
+            logAuthStatus('Initializing', 'Starting Google OAuth setup');
             
             if (typeof google === 'undefined') {
-                console.log('⏳ Waiting for Google API...');
+                logAuthStatus('Waiting for API', 'Google Identity Services not loaded yet');
                 setTimeout(initializeGoogleAuth, 100);
                 return;
             }
             
-            console.log('✅ Google API loaded');
+            logAuthStatus('API loaded', 'Google Identity Services ready');
             
-            // Initialize token client
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CONFIG.GOOGLE_CLIENT_ID,
-                scope: CONFIG.GOOGLE_SCOPES.join(' '),
-                callback: handleTokenResponse
-            });
+            try {
+                // Initialize token client
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CONFIG.GOOGLE_CLIENT_ID,
+                    scope: CONFIG.GOOGLE_SCOPES.join(' '),
+                    callback: handleTokenResponse,
+                    error_callback: (error) => {
+                        logAuthStatus('Token client error', JSON.stringify(error));
+                        // Clear any pending refresh
+                        if (window._refreshTimeoutId) {
+                            clearTimeout(window._refreshTimeoutId);
+                            window._refreshTimeoutId = null;
+                        }
+                        window._isRefreshAttempt = false;
+                        
+                        // Show sign-in button
+                        document.getElementById('loadingSection').classList.add('hidden');
+                        document.getElementById('authSection').classList.remove('hidden');
+                    }
+                });
+                
+                logAuthStatus('Token client created', `Client ID: ${CONFIG.GOOGLE_CLIENT_ID.substring(0, 20)}...`);
+                
+            } catch (error) {
+                logAuthStatus('Init error', error.message);
+                showAuthDebugInfo(`Failed to initialize OAuth: ${error.message}`);
+                document.getElementById('loadingSection').classList.add('hidden');
+                document.getElementById('errorSection').classList.remove('hidden');
+                return;
+            }
             
             // Render sign-in button
             renderSignInButton();
@@ -477,7 +568,17 @@
         }
         
         function handleTokenResponse(response) {
-            console.log('🔐 Token response received');
+            // Clear any pending timeouts
+            if (window._refreshTimeoutId) {
+                clearTimeout(window._refreshTimeoutId);
+                window._refreshTimeoutId = null;
+            }
+            if (window._signInTimeoutId) {
+                clearTimeout(window._signInTimeoutId);
+                window._signInTimeoutId = null;
+            }
+            
+            logAuthStatus('Token response received', `Has error: ${!!response.error}, Has token: ${!!response.access_token}`);
             
             const isRefresh = window._isRefreshAttempt;
             const callbacks = window._refreshCallbacks || {};
@@ -485,24 +586,24 @@
             window._refreshCallbacks = null;
             
             if (response.error) {
-                console.error('❌ OAuth error:', response.error);
+                logAuthStatus('OAuth error', `${response.error}: ${response.error_description || 'No description'}`);
                 
                 if (isRefresh) {
                     // Silent refresh failed - this is expected if user logged out of Google
-                    console.log('⚠️ Silent refresh failed, user may need to sign in again');
+                    logAuthStatus('Silent refresh failed', 'User may need to sign in again');
                     if (callbacks.onFailure) callbacks.onFailure(new Error(response.error));
                     return;
                 }
                 
                 // Regular auth failed
-                document.getElementById('errorMessage').textContent = `Authentication failed: ${response.error}`;
+                showAuthDebugInfo(`Authentication failed: ${response.error}${response.error_description ? ' - ' + response.error_description : ''}`);
                 document.getElementById('authSection').classList.add('hidden');
                 document.getElementById('errorSection').classList.remove('hidden');
                 return;
             }
             
             if (response.access_token) {
-                console.log('✅ Got access token');
+                logAuthStatus('Token received', `Expires in ${response.expires_in || 3600}s`);
                 
                 // Store token
                 const expiresIn = response.expires_in || 3600;
@@ -513,17 +614,23 @@
                 window.globalAccessToken = response.access_token;
                 
                 if (isRefresh) {
-                    console.log('🔄 Silent refresh successful!');
+                    logAuthStatus('Silent refresh successful', 'Token refreshed without user interaction');
                     if (callbacks.onSuccess) callbacks.onSuccess(response.access_token);
                     return;
                 }
                 
                 // Initial auth - load app
+                logAuthStatus('Initial auth complete', 'Loading app data');
                 document.getElementById('authSection').classList.add('hidden');
                 document.getElementById('loadingSection').classList.remove('hidden');
                 updateLoadingMessage('Signed in!', 'Loading calendar data...');
                 
                 loadAppData();
+            } else {
+                logAuthStatus('Unexpected response', 'No error but no token received');
+                showAuthDebugInfo('Unexpected OAuth response: No error but no token received. Please try again.');
+                document.getElementById('loadingSection').classList.add('hidden');
+                document.getElementById('errorSection').classList.remove('hidden');
             }
         }
         
@@ -531,18 +638,25 @@
             const tokenData = getStoredToken();
             
             if (!tokenData || !tokenData.token) {
-                console.log('🔍 No stored token');
+                logAuthStatus('No stored token', 'User needs to sign in');
                 return;
             }
             
+            // Calculate token age and remaining time
+            const now = Date.now();
+            const tokenAge = now - (tokenData.storedAt || 0);
+            const remainingMs = tokenData.expiresAt - now;
+            const remainingMin = Math.round(remainingMs / 60000);
+            
+            logAuthStatus('Found stored token', `Age: ${Math.round(tokenAge/60000)}min, Remaining: ${remainingMin}min`);
+            
             if (isTokenValid()) {
                 // Token still valid, use it
-                console.log('♻️ Using valid stored token');
+                logAuthStatus('Token valid', `${remainingMin} minutes remaining`);
                 window.accessToken = tokenData.token;
                 window.globalAccessToken = tokenData.token;
                 
                 // Schedule refresh
-                const remainingMs = tokenData.expiresAt - Date.now();
                 scheduleTokenRefresh(Math.floor(remainingMs / 1000));
                 
                 document.getElementById('authSection').classList.add('hidden');
@@ -553,7 +667,7 @@
                 
             } else if (!isTokenExpired()) {
                 // Token expiring soon, try refresh
-                console.log('⚠️ Token expiring soon, refreshing...');
+                logAuthStatus('Token expiring soon', 'Attempting proactive refresh');
                 window.accessToken = tokenData.token;
                 window.globalAccessToken = tokenData.token;
                 
@@ -562,24 +676,33 @@
                 updateLoadingMessage('Refreshing...', 'Updating credentials');
                 
                 silentTokenRefresh(
-                    () => loadAppData(),
-                    () => loadAppData() // Try with existing token anyway
+                    () => {
+                        logAuthStatus('Proactive refresh succeeded', 'Loading app data');
+                        loadAppData();
+                    },
+                    () => {
+                        logAuthStatus('Proactive refresh failed', 'Trying with existing token');
+                        loadAppData(); // Try with existing token anyway
+                    }
                 );
                 
             } else {
                 // Token expired, try silent refresh
-                console.log('⏰ Token expired, attempting silent refresh...');
+                const expiredAgo = Math.round((now - tokenData.expiresAt) / 60000);
+                logAuthStatus('Token expired', `Expired ${expiredAgo} minutes ago, attempting silent refresh`);
+                
                 document.getElementById('authSection').classList.add('hidden');
                 document.getElementById('loadingSection').classList.remove('hidden');
-                updateLoadingMessage('Signing in...', 'Please wait');
+                updateLoadingMessage('Signing in...', 'Attempting silent refresh (this may take a moment)');
                 
                 silentTokenRefresh(
                     (token) => {
-                        console.log('✅ Silent refresh worked!');
+                        logAuthStatus('Silent refresh succeeded', 'Loading app data');
                         loadAppData();
                     },
                     (error) => {
-                        console.log('⚠️ Silent refresh failed, showing sign-in');
+                        logAuthStatus('Silent refresh failed', `Error: ${error.message}`);
+                        updateLoadingMessage('Sign-in required', 'Please click the button below to sign in');
                         document.getElementById('loadingSection').classList.add('hidden');
                         document.getElementById('authSection').classList.remove('hidden');
                     }
@@ -616,26 +739,103 @@
                     </svg>
                     Sign in with Google
                 </button>
+                <p id="authStatusHint" style="font-size: 0.75rem; color: #888; margin-top: 0.75rem; cursor: pointer;" 
+                   onclick="showAuthStatusPopup()" title="Click for debug info">
+                   Having trouble? Click here for debug info
+                </p>
             `;
             
+            logAuthStatus('Sign-in button rendered', 'Ready for user interaction');
+            
             document.getElementById("customGoogleBtn").addEventListener('click', () => {
-                console.log('🖱️ Sign-in clicked');
+                logAuthStatus('Sign-in button clicked', 'Requesting access token');
+                
+                // Show loading state
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('loadingSection').classList.remove('hidden');
+                updateLoadingMessage('Signing in...', 'Waiting for Google authentication');
+                
                 // First sign-in needs consent, subsequent ones are silent
                 const tokenData = getStoredToken();
                 const prompt = tokenData ? '' : 'consent';
-                tokenClient.requestAccessToken({ prompt });
+                logAuthStatus('Token request', `Prompt mode: ${prompt || 'silent'}`);
+                
+                // Set a timeout for manual sign-in as well
+                const SIGNIN_TIMEOUT = 60000; // 60 seconds for user interaction
+                window._signInTimeoutId = setTimeout(() => {
+                    logAuthStatus('Sign-in taking too long', 'User may have closed popup or is taking time');
+                    updateLoadingMessage('Still waiting...', 'Complete sign-in in the popup, or click Cancel below');
+                }, SIGNIN_TIMEOUT);
+                
+                try {
+                    tokenClient.requestAccessToken({ prompt });
+                } catch (error) {
+                    logAuthStatus('Request failed', error.message);
+                    clearTimeout(window._signInTimeoutId);
+                    document.getElementById('loadingSection').classList.add('hidden');
+                    document.getElementById('authSection').classList.remove('hidden');
+                }
             });
         }
         
+        // Show auth status popup for debugging
+        function showAuthStatusPopup() {
+            const debugLog = authStatusLog.map(e => `[${e.timestamp}] ${e.status}: ${e.details}`).join('\n');
+            const storedToken = getStoredToken();
+            const tokenInfo = storedToken 
+                ? `Token stored: Yes\nExpires: ${new Date(storedToken.expiresAt).toLocaleString()}\nExpired: ${Date.now() > storedToken.expiresAt ? 'Yes' : 'No'}`
+                : 'Token stored: No';
+            
+            alert(`🔍 Auth Debug Info\n\n${tokenInfo}\n\n📋 Recent Activity:\n${debugLog || 'No activity logged yet'}\n\n💡 Tip: Open browser console (F12) for more details.`);
+        }
+        
+        // Cancel auth attempt and show sign-in button
+        function cancelAuthAndShowSignIn() {
+            logAuthStatus('User cancelled', 'Returning to sign-in screen');
+            
+            // Clear any pending operations
+            if (window._refreshTimeoutId) {
+                clearTimeout(window._refreshTimeoutId);
+                window._refreshTimeoutId = null;
+            }
+            if (window._signInTimeoutId) {
+                clearTimeout(window._signInTimeoutId);
+                window._signInTimeoutId = null;
+            }
+            window._isRefreshAttempt = false;
+            window._refreshCallbacks = null;
+            
+            // Show sign-in
+            document.getElementById('loadingSection').classList.add('hidden');
+            document.getElementById('authSection').classList.remove('hidden');
+        }
+        
+        // Make functions globally available
+        window.showAuthStatusPopup = showAuthStatusPopup;
+        window.cancelAuthAndShowSignIn = cancelAuthAndShowSignIn;
+        
         function loadAppData() {
             const tryLoad = (attempts = 0) => {
+                logAuthStatus('Loading app', `Attempt ${attempts + 1}/10, loadCalendarData available: ${!!window.loadCalendarData}`);
+                
                 if (window.loadCalendarData) {
+                    logAuthStatus('Calling loadCalendarData', 'Fetching calendar events');
                     updateLoadingMessage('Loading calendar...', 'Fetching events');
-                    window.loadCalendarData();
+                    
+                    try {
+                        window.loadCalendarData();
+                    } catch (error) {
+                        logAuthStatus('loadCalendarData error', error.message);
+                        showAuthDebugInfo(`Failed to load calendar data: ${error.message}`);
+                        document.getElementById('loadingSection').classList.add('hidden');
+                        document.getElementById('errorSection').classList.remove('hidden');
+                    }
                 } else if (attempts < 10) {
+                    logAuthStatus('Waiting for app.js', `Retry in 500ms (attempt ${attempts + 1})`);
                     setTimeout(() => tryLoad(attempts + 1), 500);
                 } else {
-                    document.getElementById('errorMessage').textContent = 'Failed to load app';
+                    logAuthStatus('App load failed', 'loadCalendarData not available after 10 attempts');
+                    showAuthDebugInfo('Failed to load app: Calendar loader not available. Try refreshing the page.');
                     document.getElementById('loadingSection').classList.add('hidden');
                     document.getElementById('errorSection').classList.remove('hidden');
                 }
@@ -644,8 +844,12 @@
         }
         
         // Start on page load
-        window.onload = initializeGoogleAuth;
+        window.onload = function() {
+            logAuthStatus('Page loaded', `Ready state: ${document.readyState}`);
+            initializeGoogleAuth();
+        };
         if (document.readyState !== 'loading') {
+            logAuthStatus('Document ready', 'Starting auth init');
             setTimeout(initializeGoogleAuth, 100);
         }
         
@@ -672,7 +876,7 @@
     
     <!-- Load app.js WITHOUT defer so it's available when we need it -->
     <!-- Cache busting: add timestamp to force reload -->
-    <script src="app.js?v=20251220-silent-refresh"></script>
+    <script src="app.js?v=20251221-auth-verbosity"></script>
 </body>
 </html>
 <!-- Reverted to pre-mobile-framework version -->
