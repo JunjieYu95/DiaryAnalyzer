@@ -1008,10 +1008,14 @@ function displayStackedDistribution() {
         subtitle.textContent = 'Weekly time distribution';
     } else if (range === 'month') {
         subtitle.textContent = 'Monthly time distribution';
+    } else if (range === 'last1month') {
+        subtitle.textContent = 'Last 30 days time distribution';
     } else if (range === 'quarter') {
         subtitle.textContent = 'Quarterly time distribution';
     } else if (range === 'year') {
         subtitle.textContent = 'Yearly time distribution';
+    } else if (range === 'last1year') {
+        subtitle.textContent = 'Last 12 months time distribution';
     }
 
     // Calculate overall period distribution
@@ -1102,10 +1106,16 @@ function displayOverallDistributionSummary(overall, range) {
         rangeTitle = 'Weekly';
     } else if (range === 'month') {
         rangeTitle = 'Monthly';
+    } else if (range === 'last1month') {
+        rangeTitle = 'Last 30 Days';
     } else if (range === 'quarter') {
         rangeTitle = 'Quarterly';
     } else if (range === 'year') {
         rangeTitle = 'Yearly';
+    } else if (range === 'last1year') {
+        rangeTitle = 'Last 12 Months';
+    } else {
+        rangeTitle = getDateRangeDisplayName();
     }
     summaryDiv.innerHTML = `
         <h4>Overall ${rangeTitle} Distribution</h4>
