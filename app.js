@@ -3413,8 +3413,9 @@ function aggregateDataByPeriod(events, startDate, endDate, period, categories) {
             const weekEndStr = periodEnd.toLocaleDateString([], { month: 'short', day: 'numeric' });
             periodLabel = `${weekStartStr} - ${weekEndStr}`;
             
-            // Move to next week
-            currentDate.setDate(periodStart.getDate() + 7);
+            // Move to next week - must use periodStart as base to handle month boundaries correctly
+            currentDate = new Date(periodStart);
+            currentDate.setDate(currentDate.getDate() + 7);
         } else {
             // Monthly aggregation
             periodStart = new Date(currentDate);
