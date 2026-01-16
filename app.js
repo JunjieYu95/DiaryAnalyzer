@@ -365,6 +365,38 @@ function setupEventListeners() {
         console.log('⚠️ Highlights log button not found');
     }
     
+    // Keyboard navigation for date navigation
+    document.addEventListener('keydown', (e) => {
+        // Don't capture keyboard events when typing in inputs or modals
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+            return;
+        }
+        
+        // Check if any modal is open
+        const logModal = document.getElementById('logModal');
+        const dayDetailsModal = document.getElementById('dayDetailsModal');
+        const randomRecapModal = document.getElementById('randomRecapModal');
+        if ((logModal && !logModal.classList.contains('hidden')) ||
+            (dayDetailsModal && !dayDetailsModal.classList.contains('hidden')) ||
+            (randomRecapModal && !randomRecapModal.classList.contains('hidden'))) {
+            return;
+        }
+        
+        // Arrow keys for date navigation
+        if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            navigateDate(-1);
+        } else if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            navigateDate(1);
+        } else if (e.key === 't' || e.key === 'T') {
+            // 'T' key to jump to today
+            e.preventDefault();
+            jumpToToday();
+        }
+    });
+    console.log('✅ Keyboard navigation enabled (← → arrows, T for today)');
+    
     console.log('🔧 Event listeners setup complete');
 }
 
