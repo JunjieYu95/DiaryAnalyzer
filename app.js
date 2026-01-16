@@ -266,6 +266,15 @@ function setupEventListeners() {
         console.error('❌ Next day button not found');
     }
     
+    // Today button for quick jump to current date
+    const todayBtn = document.getElementById('todayBtn');
+    if (todayBtn) {
+        todayBtn.addEventListener('click', jumpToToday);
+        console.log('✅ Today button listener added');
+    } else {
+        console.log('⚠️ Today button not found');
+    }
+    
     // Log button for quick logging
     const logButton = document.getElementById('logButton');
     if (logButton) {
@@ -355,6 +364,38 @@ function setupEventListeners() {
     } else {
         console.log('⚠️ Highlights log button not found');
     }
+    
+    // Keyboard navigation for date navigation
+    document.addEventListener('keydown', (e) => {
+        // Don't capture keyboard events when typing in inputs or modals
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+            return;
+        }
+        
+        // Check if any modal is open
+        const logModal = document.getElementById('logModal');
+        const dayDetailsModal = document.getElementById('dayDetailsModal');
+        const randomRecapModal = document.getElementById('randomRecapModal');
+        if ((logModal && !logModal.classList.contains('hidden')) ||
+            (dayDetailsModal && !dayDetailsModal.classList.contains('hidden')) ||
+            (randomRecapModal && !randomRecapModal.classList.contains('hidden'))) {
+            return;
+        }
+        
+        // Arrow keys for date navigation
+        if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            navigateDate(-1);
+        } else if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            navigateDate(1);
+        } else if (e.key === 't' || e.key === 'T') {
+            // 'T' key to jump to today
+            e.preventDefault();
+            jumpToToday();
+        }
+    });
+    console.log('✅ Keyboard navigation enabled (← → arrows, T for today)');
     
     console.log('🔧 Event listeners setup complete');
 }
@@ -833,6 +874,11 @@ function getDateRangeStart() {
             date.setDate(1);
             date.setHours(0, 0, 0, 0);
             break;
+        case 'last1month':
+            // Last 1 month: from exactly 1 month ago to today
+            date.setMonth(date.getMonth() - 1);
+            date.setHours(0, 0, 0, 0);
+            break;
         case 'quarter':
             const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
             date.setMonth(quarterStartMonth, 1);
@@ -840,6 +886,11 @@ function getDateRangeStart() {
             break;
         case 'year':
             date.setMonth(0, 1);
+            date.setHours(0, 0, 0, 0);
+            break;
+        case 'last1year':
+            // Last 1 year: from exactly 1 year ago to today
+            date.setFullYear(date.getFullYear() - 1);
             date.setHours(0, 0, 0, 0);
             break;
     }
@@ -867,6 +918,10 @@ function getDateRangeEnd() {
             date.setDate(0);
             date.setHours(23, 59, 59, 999);
             break;
+        case 'last1month':
+            // Last 1 month: ends today
+            date.setHours(23, 59, 59, 999);
+            break;
         case 'quarter':
             const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
             date.setMonth(quarterStartMonth + 3, 0);
@@ -874,6 +929,10 @@ function getDateRangeEnd() {
             break;
         case 'year':
             date.setFullYear(date.getFullYear(), 11, 31);
+            date.setHours(23, 59, 59, 999);
+            break;
+        case 'last1year':
+            // Last 1 year: ends today
             date.setHours(23, 59, 59, 999);
             break;
     }
@@ -981,10 +1040,14 @@ function displayStackedDistribution() {
         subtitle.textContent = 'Weekly time distribution';
     } else if (range === 'month') {
         subtitle.textContent = 'Monthly time distribution';
+    } else if (range === 'last1month') {
+        subtitle.textContent = 'Last 30 days time distribution';
     } else if (range === 'quarter') {
         subtitle.textContent = 'Quarterly time distribution';
     } else if (range === 'year') {
         subtitle.textContent = 'Yearly time distribution';
+    } else if (range === 'last1year') {
+        subtitle.textContent = 'Last 12 months time distribution';
     }
 
     // Calculate overall period distribution
@@ -1075,10 +1138,16 @@ function displayOverallDistributionSummary(overall, range) {
         rangeTitle = 'Weekly';
     } else if (range === 'month') {
         rangeTitle = 'Monthly';
+    } else if (range === 'last1month') {
+        rangeTitle = 'Last 30 Days';
     } else if (range === 'quarter') {
         rangeTitle = 'Quarterly';
     } else if (range === 'year') {
         rangeTitle = 'Yearly';
+    } else if (range === 'last1year') {
+        rangeTitle = 'Last 12 Months';
+    } else {
+        rangeTitle = getDateRangeDisplayName();
     }
     summaryDiv.innerHTML = `
         <h4>Overall ${rangeTitle} Distribution</h4>
@@ -1488,6 +1557,20 @@ function updateStats() {
     mostCommonSpan.textContent = mostCommon ? mostCommon[0] : '-';
 }
 
+// Jump to today's date
+function jumpToToday() {
+    console.log('📅 Jumping to today');
+    currentDate = new Date();
+    updateCurrentDateDisplay();
+    
+    // Reload data for current date
+    const token = getAccessToken();
+    if (token) {
+        showSection('loading');
+        loadCalendarData();
+    }
+}
+
 // Navigate to previous/next date
 function navigateDate(direction) {
     const range = dateRange.value;
@@ -1503,10 +1586,18 @@ function navigateDate(direction) {
         case 'month':
             newDate.setMonth(newDate.getMonth() + direction);
             break;
+        case 'last1month':
+            // Navigate by 1 month increments
+            newDate.setMonth(newDate.getMonth() + direction);
+            break;
         case 'quarter':
             newDate.setMonth(newDate.getMonth() + 3 * direction);
             break;
         case 'year':
+            newDate.setFullYear(newDate.getFullYear() + direction);
+            break;
+        case 'last1year':
+            // Navigate by 1 year increments
             newDate.setFullYear(newDate.getFullYear() + direction);
             break;
     }
@@ -1540,6 +1631,15 @@ function updateCurrentDateDisplay() {
         const quarter = Math.floor(currentDate.getMonth() / 3) + 1;
         const year = currentDate.getFullYear();
         displayString = `Q${quarter} ${year}`;
+    } else if (range === 'last1year' || range === 'last1month') {
+        // For "last" ranges, show the full date range with year
+        const startDate = getDateRangeStart();
+        const endDate = getDateRangeEnd();
+        
+        const startStr = startDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+        const endStr = endDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+        
+        displayString = `${startStr} - ${endStr}`;
     } else {
         const startDate = getDateRangeStart();
         const endDate = getDateRangeEnd();
@@ -3031,35 +3131,30 @@ function displayAggregatedView() {
         // Clear previous content
         aggregatedChart.innerHTML = '';
         
-        // Use ALL events instead of date-filtered events
-        // This makes the category trends independent of the top period selection
-        const rangeEvents = allEvents;
+        // Use the selected date range for aggregation
+        // This ensures the chart shows the full selected period, not just event dates
+        const startDate = getDateRangeStart();
+        const endDate = getDateRangeEnd();
+        
+        console.log('📊 Category Trends date range:', startDate.toLocaleDateString(), 'to', endDate.toLocaleDateString());
+        
+        // Filter events within the selected date range
+        const rangeEvents = allEvents.filter(event => {
+            const eventStart = new Date(event.start.dateTime || event.start.date);
+            const eventEnd = new Date(event.end.dateTime || event.end.date);
+            // Include event if it overlaps with the date range
+            return eventStart <= endDate && eventEnd >= startDate;
+        });
         
         console.log('📊 Total events for aggregated view:', rangeEvents.length);
         
         if (rangeEvents.length === 0) {
-            aggregatedChart.innerHTML = '<div class="no-events">No events found</div>';
+            const rangeText = getDateRangeDisplayName().toLowerCase();
+            aggregatedChart.innerHTML = `<div class="no-events">No events found for ${rangeText}</div>`;
             return;
         }
         
-        // Find the min and max dates from all events
-        let minDate = null;
-        let maxDate = null;
-        
-        rangeEvents.forEach(event => {
-            const eventDate = new Date(event.start.dateTime || event.start.date);
-            if (!minDate || eventDate < minDate) minDate = new Date(eventDate);
-            if (!maxDate || eventDate > maxDate) maxDate = new Date(eventDate);
-        });
-        
-        // Set time to start/end of day
-        if (minDate) minDate.setHours(0, 0, 0, 0);
-        if (maxDate) maxDate.setHours(23, 59, 59, 999);
-        
-        const startDate = minDate || new Date();
-        const endDate = maxDate || new Date();
-        
-        // Create aggregated chart
+        // Create aggregated chart with the selected date range
         createAggregatedChart(rangeEvents, startDate, endDate);
         
     } catch (error) {
@@ -3171,6 +3266,11 @@ function createAggregatedChart(events, startDate, endDate) {
         });
     }
     
+    // Format date range for title
+    const startDateStr = startDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    const endDateStr = endDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    const dateRangeLabel = getDateRangeDisplayName();
+    
     // Create chart
     new Chart(ctx, {
         type: 'line',
@@ -3184,7 +3284,7 @@ function createAggregatedChart(events, startDate, endDate) {
             plugins: {
                 title: {
                     display: true,
-                    text: `Category Trends - ${period.charAt(0).toUpperCase() + period.slice(1)} View`,
+                    text: [`Category Trends - ${period.charAt(0).toUpperCase() + period.slice(1)} View`, `${dateRangeLabel}: ${startDateStr} - ${endDateStr}`],
                     font: {
                         size: 16,
                         weight: 'bold'
@@ -3392,6 +3492,21 @@ function getCategoryDisplayName(category) {
         'other': 'Other Activities'
     };
     return names[category] || category;
+}
+
+// Get date range display name
+function getDateRangeDisplayName() {
+    const range = dateRange.value;
+    const names = {
+        'today': 'Today',
+        'week': 'This Week',
+        'month': 'This Month',
+        'last1month': 'Last 30 Days',
+        'quarter': 'This Quarter',
+        'year': 'This Year',
+        'last1year': 'Last 12 Months'
+    };
+    return names[range] || range;
 }
 
 // Calendar View Functions

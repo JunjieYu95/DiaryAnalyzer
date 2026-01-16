@@ -634,6 +634,30 @@ body {
     padding: 0 1rem;
 }
 
+.today-btn {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.25rem;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+    min-height: 4.5vh;
+}
+
+.today-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+}
+
+.today-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
 /* Timeline Styles */
 .timeline-container {
     background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
@@ -1660,6 +1684,14 @@ body {
         font-size: 1rem;
     }
     
+    .today-btn {
+        width: 100%;
+        max-width: 18vw;
+        margin: 0 auto;
+        padding: 0.875rem 1.25rem;
+        font-size: 0.95rem;
+    }
+    
     .current-date {
         font-size: 1.125rem;
         padding: 0.75rem;
@@ -1846,6 +1878,13 @@ body {
         max-width: 15vw;
         font-size: 0.9rem;
         padding: 0.625rem 1rem;
+    }
+    
+    .today-btn {
+        width: 100%;
+        max-width: 15vw;
+        font-size: 0.85rem;
+        padding: 0.5rem 0.875rem;
     }
     
     .current-date {
