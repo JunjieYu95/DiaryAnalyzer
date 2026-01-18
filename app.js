@@ -3389,7 +3389,7 @@ function getSelectedCategories(events) {
 // Aggregate data by period (weekly or monthly)
 function aggregateDataByPeriod(events, startDate, endDate, period, categories) {
     const aggregatedData = [];
-    const currentDate = new Date(startDate);
+    let currentDate = new Date(startDate);
     
     while (currentDate <= endDate) {
         let periodStart, periodEnd;
