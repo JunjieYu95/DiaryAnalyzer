@@ -54,3 +54,4 @@ tests/
 *-backup-*.html
 *.bak
 .vercel
+.env*.local

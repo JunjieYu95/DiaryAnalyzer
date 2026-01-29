@@ -1,6 +1,7 @@
 {
   "name": "diary-analyzer-web-app",
   "version": "1.0.0",
+  "type": "module",
   "description": "A beautiful web application for visualizing Google Calendar diary entries in a clean timeline format",
   "main": "index.html",
   "scripts": {
@@ -10,7 +11,8 @@
     "build": "echo 'No build step required for static web app'",
     "test": "echo 'No tests specified' && exit 0",
     "lint": "echo 'No linting configured' && exit 0",
-    "clean": "echo 'No cleanup required for static web app'"
+    "clean": "echo 'No cleanup required for static web app'",
+    "setup:auth": "node scripts/get-refresh-token.js"
   },
   "keywords": [
     "web-app",
