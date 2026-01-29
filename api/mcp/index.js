@@ -5,7 +5,7 @@
  * Uses stored refresh token for seamless authentication without user interaction.
  */
 
-import { createCalendarEvent, getCalendarList, getCalendarEvents, getLastEventEndTime, parseFlexibleTime } from "../_lib/google-auth.js";
+import { createCalendarEvent, getCalendarList, getCalendarEvents, getLastEventEndTime, parseFlexibleTime, getAccessToken } from "../_lib/google-auth.js";
 import { sendJson, sendError, parseJsonBody, onlyMethods } from "../_lib/http.js";
 
 // ============================================================================
@@ -14,8 +14,15 @@ import { sendJson, sendError, parseJsonBody, onlyMethods } from "../_lib/http.js
 
 const CALENDAR_MAP = {
   prod: "Actual Diary - Prod",
-  nonprod: "Actual Diary -Nonprod",
+  nonprod: "Actual Diary - Nonprod",
   admin: "Actual Diary - Admin/Rest/Routine",
+};
+
+// Alternative calendar names for flexible matching
+const CALENDAR_ALIASES = {
+  prod: ["productive", "work", "productivity", "Actual Diary - Prod"],
+  nonprod: ["nonproductive", "non-productive", "leisure", "fun", "Actual Diary - Nonprod"],
+  admin: ["admin", "rest", "routine", "Actual Diary - Admin/Rest/Routine"],
 };
 
 const CATEGORY_CALENDARS = Object.values(CALENDAR_MAP);
@@ -27,62 +34,78 @@ const CATEGORY_CALENDARS = Object.values(CALENDAR_MAP);
 const MCP_TOOLS = [
   {
     name: "diary.log",
-    description:
-      "Log an activity to Google Calendar. Automatically uses the end time of the last logged activity as start time, and current time as end time if not specified.",
+    description: `LOG ACTIVITIES TO CALENDAR. Use this tool when the user wants to:
+- Log, record, or track an activity they did
+- Add an entry to their diary/calendar
+- Record time spent on something
+- Track what they did during a time period
+
+Examples: "Log that I worked on coding from 9am to 12pm", "Record my gym session", "Track my meeting with John", "I just finished lunch"
+
+This tool creates calendar events. It automatically determines start time from the last logged activity if not specified, and uses current time as end time if not specified.`,
     inputSchema: {
       type: "object",
       properties: {
         title: {
           type: "string",
-          description: "Title/summary of the activity (required)",
+          description: "Activity title/summary. Examples: 'Coding session', 'Team meeting', 'Lunch break', 'Gym workout'. REQUIRED.",
         },
         category: {
           type: "string",
           enum: ["prod", "nonprod", "admin"],
-          description:
-            "Category for the activity: 'prod' (productive work like coding, meetings, learning), 'nonprod' (leisure, entertainment, social), 'admin' (routine tasks, rest, admin work). Required - infer from title if not explicitly specified.",
+          description: `Activity category. REQUIRED. Infer from title if not specified:
+- 'prod': Productive work - coding, meetings, studying, exercising, work tasks, learning, focused work
+- 'nonprod': Non-productive leisure - gaming, watching TV, social media, entertainment, hanging out
+- 'admin': Administrative/routine - eating, sleeping, commuting, errands, rest, breaks, chores`,
         },
         description: {
           type: "string",
-          description: "Optional description or notes about the activity",
+          description: "Optional notes or details about the activity",
         },
         startTime: {
           type: "string",
-          description:
-            "Start time: ISO 8601 format, 'now', or simple time like '2:30pm', '14:30'. If omitted, uses the end time of the last logged activity.",
+          description: "Start time. Formats: '9am', '9:30am', '14:30', '2:30pm', 'now', or ISO 8601. If omitted, uses end time of last logged activity (smart continuation).",
         },
         endTime: {
           type: "string",
-          description:
-            "End time: ISO 8601 format, 'now', or simple time like '5pm', '17:00'. If omitted, uses current time.",
+          description: "End time. Formats: '12pm', '12:30pm', '17:00', '5pm', 'now', or ISO 8601. If omitted, uses current time.",
         },
         timeZone: {
           type: "string",
-          description: "Timezone for the event. Defaults to America/Denver.",
+          description: "IANA timezone. Defaults to America/Denver.",
           default: "America/Denver",
         },
       },
       required: ["title", "category"],
     },
     annotations: {
+      title: "Log Activity",
       readOnlyHint: false,
       destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
     },
   },
   {
     name: "diary.logHighlight",
-    description:
-      "Log a highlight or milestone to Google Calendar. Creates an all-day event.",
+    description: `LOG HIGHLIGHTS AND MILESTONES. Use this tool when the user wants to:
+- Record a significant achievement or milestone
+- Mark a special day or memorable moment
+- Add a highlight to their diary
+
+Examples: "Mark today as the day I finished my project", "Add a milestone for completing the marathon", "Record this achievement"
+
+Creates an all-day event with an emoji prefix based on type.`,
     inputSchema: {
       type: "object",
       properties: {
         title: {
           type: "string",
-          description: "Title of the highlight/milestone (required)",
+          description: "Title of the highlight/milestone. REQUIRED.",
         },
         description: {
           type: "string",
-          description: "Description of the highlight",
+          description: "Additional details about the highlight",
         },
         date: {
           type: "string",
@@ -91,61 +114,75 @@ const MCP_TOOLS = [
         type: {
           type: "string",
           enum: ["highlight", "milestone", "achievement", "memory"],
-          description: "Type of the entry. Prefixed to the title.",
+          description: "Type determines emoji: highlight(⭐), milestone(🎯), achievement(🏆), memory(💭). Defaults to highlight.",
           default: "highlight",
         },
         calendar: {
           type: "string",
-          description: 'Calendar name. Defaults to "Highlights".',
+          description: 'Target calendar name. Defaults to "Highlights".',
           default: "Highlights",
         },
       },
       required: ["title"],
     },
     annotations: {
+      title: "Log Highlight",
       readOnlyHint: false,
       destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
     },
   },
   {
     name: "diary.listCalendars",
-    description: "List all available Google Calendars for the authenticated account.",
+    description: "LIST AVAILABLE CALENDARS. Shows all Google Calendars the user has access to. Use to discover calendar names for other operations.",
     inputSchema: {
       type: "object",
       properties: {},
     },
     annotations: {
+      title: "List Calendars",
       readOnlyHint: true,
       destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     },
   },
   {
     name: "diary.queryEvents",
-    description: "Query calendar events for a specific date or date range.",
+    description: `QUERY CALENDAR EVENTS. Use this tool when the user wants to:
+- See what activities they logged on a specific day
+- Review their diary entries for a date range
+- Check what they did yesterday/last week
+
+Examples: "What did I do yesterday?", "Show my activities from last Monday", "What have I logged this week?"`,
     inputSchema: {
       type: "object",
       properties: {
         date: {
           type: "string",
-          description: "Date to query in YYYY-MM-DD format. Defaults to today.",
+          description: "Single date to query in YYYY-MM-DD format. Defaults to today.",
         },
         from: {
           type: "string",
-          description: "Start date for range query (YYYY-MM-DD).",
+          description: "Range query start date (YYYY-MM-DD). Use with 'to'.",
         },
         to: {
           type: "string",
-          description: "End date for range query (YYYY-MM-DD).",
+          description: "Range query end date (YYYY-MM-DD). Use with 'from'.",
         },
         calendar: {
           type: "string",
-          description: "Calendar name to query. Defaults to primary calendar.",
+          description: "Specific calendar name to query. Defaults to primary.",
         },
       },
     },
     annotations: {
+      title: "Query Events",
       readOnlyHint: true,
       destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     },
   },
 ];
@@ -164,14 +201,79 @@ const TOOL_SCOPES = {
 
 const SERVER_INFO = {
   name: "diary-analyzer",
-  version: "1.0.0",
+  version: "1.2.0",
+  vendor: "DiaryAnalyzer",
+  description: "Log activities and highlights to Google Calendar. Supports smart category inference, flexible time formats, and automatic time continuation.",
 };
 
 const SERVER_CAPABILITIES = {
   tools: { listChanged: false },
   resources: { listChanged: false, subscribe: false },
   prompts: { listChanged: false },
+  logging: {},
 };
+
+// ============================================================================
+// Health Check
+// ============================================================================
+
+/**
+ * Check MCP server health and configuration
+ * @returns {Object} Health status
+ */
+async function checkHealth() {
+  const checks = {
+    server: { status: "ok", version: SERVER_INFO.version },
+    tools: { status: "ok", count: MCP_TOOLS.length },
+    googleAuth: { status: "unknown" },
+    calendars: { status: "unknown" },
+  };
+
+  // Check Google auth
+  try {
+    await getAccessToken();
+    checks.googleAuth = { status: "ok" };
+  } catch (err) {
+    checks.googleAuth = { status: "error", message: err.message };
+  }
+
+  // Check calendars if auth is ok
+  if (checks.googleAuth.status === "ok") {
+    try {
+      const calendarList = await getCalendarList();
+      const categoryCalendars = Object.values(CALENDAR_MAP);
+      const foundCalendars = categoryCalendars.filter(name =>
+        calendarList.items?.some(cal =>
+          cal.summary === name || cal.summary?.toLowerCase() === name.toLowerCase()
+        )
+      );
+
+      if (foundCalendars.length === categoryCalendars.length) {
+        checks.calendars = { status: "ok", count: calendarList.items?.length || 0, categoryCalendars: foundCalendars };
+      } else {
+        const missing = categoryCalendars.filter(name => !foundCalendars.includes(name));
+        checks.calendars = {
+          status: "warning",
+          message: `Missing category calendars: ${missing.join(", ")}`,
+          found: foundCalendars,
+          missing,
+        };
+      }
+    } catch (err) {
+      checks.calendars = { status: "error", message: err.message };
+    }
+  }
+
+  // Overall status
+  const hasError = Object.values(checks).some(c => c.status === "error");
+  const hasWarning = Object.values(checks).some(c => c.status === "warning");
+
+  return {
+    status: hasError ? "unhealthy" : hasWarning ? "degraded" : "healthy",
+    timestamp: new Date().toISOString(),
+    checks,
+  };
+}
 
 // ============================================================================
 // Utility Functions
@@ -184,6 +286,107 @@ function parseScopes(raw) {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+// ============================================================================
+// Smart Category Inference
+// ============================================================================
+
+const CATEGORY_KEYWORDS = {
+  prod: [
+    // Work activities
+    'work', 'working', 'coding', 'programming', 'meeting', 'meetings', 'call', 'calls',
+    'project', 'task', 'tasks', 'email', 'emails', 'presentation', 'review', 'planning',
+    'design', 'develop', 'development', 'debugging', 'testing', 'deploy', 'deployment',
+    'standup', 'stand-up', 'sync', 'interview', 'client', 'deadline', 'sprint', 'scrum',
+    // Learning
+    'study', 'studying', 'learning', 'course', 'tutorial', 'reading', 'research', 'class',
+    'lecture', 'workshop', 'training', 'practice', 'lesson', 'homework', 'assignment',
+    // Exercise/Health
+    'gym', 'workout', 'exercise', 'running', 'run', 'jogging', 'yoga', 'meditation',
+    'swimming', 'cycling', 'hiking', 'walking', 'fitness', 'training', 'sports',
+    // Creative work
+    'writing', 'blog', 'article', 'content', 'creating', 'building', 'making',
+    // Professional
+    'office', 'conference', 'networking', 'mentor', 'coaching',
+  ],
+  nonprod: [
+    // Entertainment
+    'netflix', 'youtube', 'movie', 'movies', 'tv', 'show', 'shows', 'watching', 'streaming',
+    'gaming', 'game', 'games', 'playing', 'video game', 'videogame',
+    // Social
+    'friends', 'hanging out', 'party', 'drinks', 'bar', 'club', 'social', 'chatting',
+    'texting', 'scrolling', 'browsing', 'social media', 'instagram', 'twitter', 'tiktok',
+    'facebook', 'reddit',
+    // Leisure
+    'relaxing', 'relax', 'chill', 'chilling', 'leisure', 'fun', 'entertainment',
+    'hobby', 'hobbies', 'vacation', 'holiday', 'trip', 'travel',
+    // Shopping
+    'shopping', 'mall', 'buying',
+  ],
+  admin: [
+    // Daily routine
+    'sleep', 'sleeping', 'woke up', 'wake up', 'waking up', 'bed', 'nap', 'rest', 'resting',
+    'breakfast', 'lunch', 'dinner', 'eating', 'meal', 'food', 'cooking', 'cook',
+    'shower', 'showering', 'bath', 'getting ready', 'morning routine',
+    // Commute
+    'commute', 'commuting', 'drive', 'driving', 'drove', 'transit', 'bus', 'train', 'subway',
+    'uber', 'lyft', 'taxi', 'travel to', 'heading to', 'going to',
+    // Chores
+    'cleaning', 'clean', 'laundry', 'dishes', 'groceries', 'grocery', 'errands', 'errand',
+    'chores', 'housework', 'organizing', 'tidying',
+    // Admin tasks
+    'appointment', 'doctor', 'dentist', 'bank', 'bills', 'paperwork', 'admin',
+    'waiting', 'queue',
+    // Breaks
+    'break', 'coffee break', 'lunch break', 'pause',
+  ],
+};
+
+/**
+ * Infer category from activity title
+ * @param {string} title - Activity title
+ * @returns {{ category: string, confidence: string }} - Inferred category and confidence level
+ */
+function inferCategory(title) {
+  if (!title) return { category: null, confidence: 'none' };
+
+  const normalizedTitle = title.toLowerCase();
+  const scores = { prod: 0, nonprod: 0, admin: 0 };
+
+  // Check each category's keywords
+  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    for (const keyword of keywords) {
+      if (normalizedTitle.includes(keyword)) {
+        // Longer keyword matches get higher scores
+        scores[category] += keyword.length;
+      }
+    }
+  }
+
+  // Find the best match
+  const maxScore = Math.max(scores.prod, scores.nonprod, scores.admin);
+
+  if (maxScore === 0) {
+    return { category: null, confidence: 'none' };
+  }
+
+  // Determine confidence based on score and margin
+  const sortedScores = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  const bestCategory = sortedScores[0][0];
+  const secondBest = sortedScores[1][1];
+  const margin = maxScore - secondBest;
+
+  let confidence;
+  if (maxScore >= 10 && margin >= 5) {
+    confidence = 'high';
+  } else if (maxScore >= 5) {
+    confidence = 'medium';
+  } else {
+    confidence = 'low';
+  }
+
+  return { category: bestCategory, confidence };
 }
 
 function requireScope(scopes, required) {
@@ -219,37 +422,101 @@ function parseDateTime(value, defaultToNow = true) {
 
 async function handleLog(args, utcOffsetMinutes) {
   const title = args.title;
-  if (!title) {
-    throw { code: -32602, message: "title is required" };
-  }
-
-  const category = args.category;
-  
-  // Check if category confidence is low - return follow-up question
-  if (args._categoryConfidence === 'low' || !category) {
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Which category best fits "${title}"?`,
-        },
-      ],
-      isFollowUp: true,
-      followUpData: {
-        pendingAction: "diary.log",
-        pendingArgs: { ...args, _categoryConfidence: undefined },
-        options: [
-          { id: "prod", label: "Productive (work, learning, exercise)" },
-          { id: "nonprod", label: "Non-productive (leisure, entertainment)" },
-          { id: "admin", label: "Admin/Rest (meals, routine, rest)" },
-        ],
-      },
+  if (!title || typeof title !== 'string' || title.trim().length === 0) {
+    throw {
+      code: -32602,
+      message: "title is required and must be a non-empty string",
+      data: { field: "title", received: title }
     };
   }
 
-  if (!CALENDAR_MAP[category]) {
-    throw { code: -32602, message: "category must be 'prod', 'nonprod', or 'admin'" };
+  // Smart category inference
+  let category = args.category;
+  let wasInferred = false;
+
+  if (!category) {
+    const inference = inferCategory(title);
+    if (inference.category && inference.confidence !== 'none') {
+      category = inference.category;
+      wasInferred = true;
+
+      // For low confidence, ask for confirmation (optional - can be disabled)
+      if (inference.confidence === 'low' && args._allowLowConfidence !== true) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `I inferred "${inference.category}" for "${title}" but I'm not very confident. Which category is correct?\n\n- **prod**: Productive (work, learning, exercise)\n- **nonprod**: Non-productive (leisure, entertainment)\n- **admin**: Admin/Rest (meals, commute, routine)`,
+            },
+          ],
+          isFollowUp: true,
+          followUpData: {
+            pendingAction: "diary.log",
+            pendingArgs: { ...args, _allowLowConfidence: true },
+            suggestedCategory: inference.category,
+            options: [
+              { id: "prod", label: "Productive (work, learning, exercise)" },
+              { id: "nonprod", label: "Non-productive (leisure, entertainment)" },
+              { id: "admin", label: "Admin/Rest (meals, routine, rest)" },
+            ],
+          },
+        };
+      }
+    } else {
+      // No inference possible - ask user
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Which category best fits "${title}"?\n\n- **prod**: Productive (work, learning, exercise)\n- **nonprod**: Non-productive (leisure, entertainment)\n- **admin**: Admin/Rest (meals, commute, routine)`,
+          },
+        ],
+        isFollowUp: true,
+        followUpData: {
+          pendingAction: "diary.log",
+          pendingArgs: args,
+          options: [
+            { id: "prod", label: "Productive (work, learning, exercise)" },
+            { id: "nonprod", label: "Non-productive (leisure, entertainment)" },
+            { id: "admin", label: "Admin/Rest (meals, routine, rest)" },
+          ],
+        },
+      };
+    }
   }
+
+  // Normalize category (handle variations)
+  const normalizedCategory = category.toLowerCase().trim();
+  const categoryMapping = {
+    prod: 'prod',
+    productive: 'prod',
+    work: 'prod',
+    nonprod: 'nonprod',
+    'non-prod': 'nonprod',
+    'non-productive': 'nonprod',
+    nonproductive: 'nonprod',
+    leisure: 'nonprod',
+    admin: 'admin',
+    rest: 'admin',
+    routine: 'admin',
+  };
+
+  const finalCategory = categoryMapping[normalizedCategory] || normalizedCategory;
+
+  if (!CALENDAR_MAP[finalCategory]) {
+    throw {
+      code: -32602,
+      message: `Invalid category: "${category}". Must be 'prod' (productive), 'nonprod' (non-productive), or 'admin' (routine/rest).`,
+      data: {
+        field: "category",
+        received: category,
+        validOptions: Object.keys(CALENDAR_MAP),
+      }
+    };
+  }
+
+  // Use finalCategory for the rest of the function
+  const validCategory = finalCategory;
 
   const timeZone = args.timeZone || "America/Denver";
   
@@ -296,7 +563,7 @@ async function handleLog(args, utcOffsetMinutes) {
   }
 
   // Get the calendar name from category
-  const calendarName = CALENDAR_MAP[category];
+  const calendarName = CALENDAR_MAP[validCategory];
 
   const eventData = {
     summary: title,
@@ -325,17 +592,20 @@ async function handleLog(args, utcOffsetMinutes) {
     admin: "Admin/Rest",
   };
 
+  const inferredNote = wasInferred ? ` (category auto-detected)` : '';
+
   return {
     content: [
       {
         type: "text",
-        text: `Activity logged: "${title}" to ${categoryLabels[category]} calendar (${formatTime(startDateTime)} - ${formatTime(endDateTime)})`,
+        text: `✅ Activity logged: "${title}" to ${categoryLabels[validCategory]} calendar (${formatTime(startDateTime)} - ${formatTime(endDateTime)})${inferredNote}`,
       },
     ],
     structuredContent: {
       success: true,
       message: `Activity logged successfully`,
-      category: category,
+      category: validCategory,
+      categoryWasInferred: wasInferred,
       calendar: calendarName,
       event: {
         id: result.id,
@@ -504,8 +774,25 @@ async function handleMCPRequest(body, headers) {
         protocolVersion: "2024-11-05",
         capabilities: SERVER_CAPABILITIES,
         serverInfo: SERVER_INFO,
-        instructions:
-          "Log activities and highlights to Google Calendar. Use diary.log for activities and diary.logHighlight for milestones.",
+        instructions: `DIARY ANALYZER - Activity Logging Tools
+
+WHEN TO USE diary.log:
+- User wants to LOG, RECORD, or TRACK an activity
+- User says "I did X", "I spent time on X", "Log that I..."
+- User mentions time periods: "from X to Y", "for N hours"
+- Examples: "Log my coding session", "Record gym workout", "Track meeting with John"
+
+WHEN TO USE diary.logHighlight:
+- User wants to mark a MILESTONE, ACHIEVEMENT, or MEMORABLE moment
+- User says "Mark this day as...", "Record this achievement"
+- Examples: "Add milestone for finishing project", "Record this highlight"
+
+CATEGORY INFERENCE:
+- prod (productive): work, coding, meetings, studying, exercise
+- nonprod (leisure): gaming, watching TV, social media, entertainment
+- admin (routine): eating, sleeping, commuting, errands, rest
+
+The system auto-infers category from activity titles. Start time defaults to the end of the last logged activity.`,
       });
 
     case "initialized":
@@ -561,10 +848,26 @@ async function handleMCPRequest(body, headers) {
 
         return jsonRpcResult(id, result);
       } catch (err) {
+        console.error(`Tool ${name} error:`, err);
+
+        // Handle structured errors
         if (err.code && err.message) {
-          return jsonRpcError(id, err.code, err.message);
+          return jsonRpcError(id, err.code, err.message, err.data);
         }
-        return jsonRpcError(id, -32603, err.message || "Internal error");
+
+        // Handle Google API errors
+        if (err.message?.includes('Failed to')) {
+          return jsonRpcError(id, -32603, err.message, {
+            tool: name,
+            hint: "Check Google Calendar API configuration and permissions",
+          });
+        }
+
+        // Generic error with helpful context
+        return jsonRpcError(id, -32603, err.message || "Internal error", {
+          tool: name,
+          errorType: err.name || 'Error',
+        });
       }
     }
 
@@ -599,15 +902,39 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Handle GET request for server info
+  // Handle GET request for server info or health check
   if (req.method === "GET") {
+    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+
+    // Health check endpoint
+    if (url.searchParams.has('health') || url.pathname.endsWith('/health')) {
+      try {
+        const health = await checkHealth();
+        const statusCode = health.status === 'healthy' ? 200 : health.status === 'degraded' ? 200 : 503;
+        sendJson(res, statusCode, health);
+      } catch (err) {
+        sendJson(res, 503, {
+          status: 'unhealthy',
+          timestamp: new Date().toISOString(),
+          error: err.message,
+        });
+      }
+      return;
+    }
+
+    // Server info (default GET)
     sendJson(res, 200, {
       ...SERVER_INFO,
       protocol: "mcp",
       protocolVersion: "2024-11-05",
       capabilities: SERVER_CAPABILITIES,
       toolCount: MCP_TOOLS.length,
-      tools: MCP_TOOLS.map((t) => ({ name: t.name, description: t.description })),
+      tools: MCP_TOOLS.map((t) => ({
+        name: t.name,
+        description: t.description.split('\n')[0], // First line only for summary
+        annotations: t.annotations,
+      })),
+      healthEndpoint: "?health",
     });
     return;
   }

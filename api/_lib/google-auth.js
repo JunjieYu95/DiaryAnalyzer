@@ -1,6 +1,6 @@
 /**
  * Google OAuth Helper for server-side token refresh
- * 
+ *
  * This module handles automatic access token refresh using stored refresh tokens.
  * The refresh token should be stored in the GOOGLE_REFRESH_TOKEN environment variable.
  */
@@ -8,6 +8,97 @@
 // Cache for access token
 let cachedAccessToken = null;
 let tokenExpiresAt = 0;
+
+// ============================================================================
+// Retry Logic with Exponential Backoff
+// ============================================================================
+
+/**
+ * Sleep for a given number of milliseconds
+ * @param {number} ms - Milliseconds to sleep
+ */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Retry a function with exponential backoff
+ * @param {Function} fn - Async function to retry
+ * @param {Object} options - Retry options
+ * @param {number} options.maxRetries - Maximum number of retries (default: 3)
+ * @param {number} options.baseDelay - Base delay in ms (default: 1000)
+ * @param {number} options.maxDelay - Maximum delay in ms (default: 10000)
+ * @param {Function} options.shouldRetry - Function to determine if error is retryable
+ * @returns {Promise<any>} - Result of the function
+ */
+async function withRetry(fn, options = {}) {
+  const {
+    maxRetries = 3,
+    baseDelay = 1000,
+    maxDelay = 10000,
+    shouldRetry = (error) => {
+      // Retry on network errors and 5xx errors
+      if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
+        return true;
+      }
+      if (error.status >= 500 && error.status < 600) {
+        return true;
+      }
+      // Retry on rate limiting
+      if (error.status === 429) {
+        return true;
+      }
+      return false;
+    },
+  } = options;
+
+  let lastError;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+
+      if (attempt >= maxRetries || !shouldRetry(error)) {
+        throw error;
+      }
+
+      // Calculate delay with exponential backoff and jitter
+      const delay = Math.min(
+        baseDelay * Math.pow(2, attempt) + Math.random() * 1000,
+        maxDelay
+      );
+
+      console.warn(`Retry attempt ${attempt + 1}/${maxRetries} after ${Math.round(delay)}ms. Error: ${error.message}`);
+      await sleep(delay);
+    }
+  }
+
+  throw lastError;
+}
+
+/**
+ * Fetch with retry logic
+ * @param {string} url - URL to fetch
+ * @param {Object} options - Fetch options
+ * @param {Object} retryOptions - Retry options
+ * @returns {Promise<Response>} - Fetch response
+ */
+async function fetchWithRetry(url, options = {}, retryOptions = {}) {
+  return withRetry(async () => {
+    const response = await fetch(url, options);
+
+    // Throw error for retryable status codes so retry logic kicks in
+    if (response.status >= 500 || response.status === 429) {
+      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+      error.status = response.status;
+      throw error;
+    }
+
+    return response;
+  }, retryOptions);
+}
 
 // ============================================================================
 // Time Parsing Utilities
@@ -120,8 +211,8 @@ export async function getAccessToken() {
     );
   }
 
-  // Refresh the access token
-  const response = await fetch("https://oauth2.googleapis.com/token", {
+  // Refresh the access token with retry logic
+  const response = await fetchWithRetry("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -132,12 +223,12 @@ export async function getAccessToken() {
       refresh_token: refreshToken,
       grant_type: "refresh_token",
     }),
-  });
+  }, { maxRetries: 2 });
 
   if (!response.ok) {
-    const error = await response.json();
+    const error = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(
-      `Failed to refresh access token: ${error.error_description || error.error}`
+      `Failed to refresh access token: ${error.error_description || error.error || 'Unknown error'}`
     );
   }
 
@@ -155,20 +246,21 @@ export async function getAccessToken() {
  */
 export async function getCalendarList() {
   const accessToken = await getAccessToken();
-  
-  const response = await fetch(
+
+  const response = await fetchWithRetry(
     "https://www.googleapis.com/calendar/v3/users/me/calendarList",
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-    }
+    },
+    { maxRetries: 2 }
   );
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(`Failed to fetch calendar list: ${error.error?.message || response.statusText}`);
+    const error = await response.json().catch(() => ({ error: { message: response.statusText } }));
+    throw new Error(`Failed to fetch calendar list: ${error.error?.message || 'Unknown error'}`);
   }
 
   return response.json();
@@ -244,7 +336,7 @@ export async function createCalendarEvent(eventData) {
     };
   }
 
-  const response = await fetch(
+  const response = await fetchWithRetry(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
     {
       method: "POST",
@@ -253,13 +345,14 @@ export async function createCalendarEvent(eventData) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(eventPayload),
-    }
+    },
+    { maxRetries: 2 }
   );
 
   if (!response.ok) {
-    const error = await response.json();
+    const error = await response.json().catch(() => ({ error: { message: response.statusText } }));
     throw new Error(
-      `Failed to create event: ${error.error?.message || response.statusText}`
+      `Failed to create event: ${error.error?.message || 'Unknown error'}`
     );
   }
 
@@ -286,20 +379,21 @@ export async function getCalendarEvents(options = {}) {
     maxResults: options.maxResults || "250",
   });
 
-  const response = await fetch(
+  const response = await fetchWithRetry(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-    }
+    },
+    { maxRetries: 2 }
   );
 
   if (!response.ok) {
-    const error = await response.json();
+    const error = await response.json().catch(() => ({ error: { message: response.statusText } }));
     throw new Error(
-      `Failed to fetch events: ${error.error?.message || response.statusText}`
+      `Failed to fetch events: ${error.error?.message || 'Unknown error'}`
     );
   }
 
@@ -357,7 +451,7 @@ export async function getLastEventEndTime(calendarNames, timeZone = "America/Den
     return null;
   }
 
-  // Query events from all calendars in parallel
+  // Query events from all calendars in parallel with retry logic
   const eventPromises = calendarIds.map(async (calendarId) => {
     try {
       const params = new URLSearchParams({
@@ -368,14 +462,15 @@ export async function getLastEventEndTime(calendarNames, timeZone = "America/Den
         maxResults: "50",
       });
 
-      const response = await fetch(
+      const response = await fetchWithRetry(
         `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
             "Content-Type": "application/json",
           },
-        }
+        },
+        { maxRetries: 1 } // Lower retries for parallel queries
       );
 
       if (!response.ok) {
@@ -385,7 +480,7 @@ export async function getLastEventEndTime(calendarNames, timeZone = "America/Den
       const data = await response.json();
       return data.items || [];
     } catch (err) {
-      console.error(`Error fetching events from calendar ${calendarId}:`, err);
+      console.warn(`Error fetching events from calendar ${calendarId}:`, err.message);
       return [];
     }
   });
