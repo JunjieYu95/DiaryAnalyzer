@@ -576,14 +576,22 @@ async function handleLog(args, utcOffsetMinutes) {
 
   const result = await createCalendarEvent(eventData);
 
-  // Format times for display
+  // Format times for display using user's UTC offset for accuracy
   const formatTime = (date) => {
-    return date.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-      timeZone: timeZone,
-    });
+    // Apply user's UTC offset to get their local time
+    let displayDate = date;
+    if (Number.isFinite(utcOffsetMinutes)) {
+      displayDate = new Date(date.getTime() + utcOffsetMinutes * 60 * 1000);
+    }
+
+    // Format the adjusted time
+    const hours = displayDate.getUTCHours();
+    const minutes = displayDate.getUTCMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const hour12 = hours % 12 || 12;
+    const minuteStr = minutes.toString().padStart(2, '0');
+
+    return `${hour12}:${minuteStr} ${ampm}`;
   };
 
   const categoryLabels = {
