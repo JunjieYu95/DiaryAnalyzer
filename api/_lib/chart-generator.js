@@ -1,7 +1,7 @@
 /**
  * Server-side Chart Generator for Time Statistics
  * 
- * Generates PNG chart images using Chart.js with @napi-rs/canvas
+ * Uses QuickChart.io API to generate PNG chart images
  * Returns base64-encoded image data for MCP responses
  */
 
@@ -28,7 +28,7 @@ const CATEGORY_LABELS = {
 };
 
 /**
- * Generate a time statistics chart as a base64 PNG image
+ * Generate a time statistics chart as a base64 PNG image using QuickChart.io
  * @param {Object} stats - Statistics object with prod, nonprod, admin, dailyBreakdown
  * @param {string} periodLabel - Label for the time period (e.g., "This Week")
  * @param {string} chartType - Type of chart: "bar", "pie", or "doughnut"
@@ -36,46 +36,43 @@ const CATEGORY_LABELS = {
  */
 export async function generateTimeStatsChart(stats, periodLabel, chartType = 'bar') {
   try {
-    // Dynamic imports for serverless environment
-    const { createCanvas, GlobalFonts } = await import('@napi-rs/canvas');
-    const { Chart, registerables } = await import('chart.js');
-    
-    // Register all Chart.js components
-    Chart.register(...registerables);
-    
-    // Set default font for Chart.js (use system fonts available in serverless)
-    Chart.defaults.font.family = 'Arial, Helvetica, sans-serif';
-    Chart.defaults.font.size = 12;
-    Chart.defaults.color = '#374151';
-    
-    // Create canvas with larger size for better quality
-    const width = 900;
-    const height = chartType === 'bar' ? 500 : 550;
-    const canvas = createCanvas(width, height);
-    const ctx = canvas.getContext('2d');
-    
-    // Fill background with white
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, width, height);
-    
-    let configuration;
+    let chartConfig;
     
     if (chartType === 'bar') {
-      configuration = createBarChartConfig(stats, periodLabel);
+      chartConfig = createBarChartConfig(stats, periodLabel);
     } else if (chartType === 'pie' || chartType === 'doughnut') {
-      configuration = createPieChartConfig(stats, periodLabel, chartType);
+      chartConfig = createPieChartConfig(stats, periodLabel, chartType);
     } else {
-      configuration = createBarChartConfig(stats, periodLabel);
+      chartConfig = createBarChartConfig(stats, periodLabel);
     }
+
+    // Use QuickChart.io API to generate the chart
+    const quickChartUrl = 'https://quickchart.io/chart';
     
-    // Create chart
-    new Chart(ctx, configuration);
-    
-    // Convert to PNG buffer and then base64
-    const buffer = canvas.toBuffer('image/png');
-    const base64 = buffer.toString('base64');
-    
+    const response = await fetch(quickChartUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chart: chartConfig,
+        width: 800,
+        height: chartType === 'bar' ? 450 : 500,
+        backgroundColor: 'white',
+        format: 'png',
+        encoding: 'base64',
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('QuickChart API error:', response.status, response.statusText);
+      return null;
+    }
+
+    // The response is the base64 string directly
+    const base64 = await response.text();
     return base64;
+    
   } catch (err) {
     console.error('Error generating chart:', err);
     return null;
@@ -105,7 +102,7 @@ function createBarChartConfig(stats, periodLabel) {
       datasets: [
         {
           label: CATEGORY_LABELS.prod,
-          data: dailyData.map(d => Math.round(d.prod / 60 * 10) / 10), // Convert to hours
+          data: dailyData.map(d => Math.round(d.prod / 60 * 10) / 10),
           backgroundColor: COLORS.prod.background,
           borderColor: COLORS.prod.border,
           borderWidth: 2,
@@ -127,43 +124,26 @@ function createBarChartConfig(stats, periodLabel) {
       ],
     },
     options: {
-      responsive: false,
-      animation: false,
-      maintainAspectRatio: false,
-      layout: {
-        padding: {
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: 20,
-        },
-      },
       plugins: {
         title: {
           display: true,
           text: `Time Distribution - ${periodLabel}`,
-          color: '#1f2937',
           font: {
-            size: 20,
+            size: 18,
             weight: 'bold',
-            family: 'Arial, Helvetica, sans-serif',
           },
           padding: {
-            top: 10,
-            bottom: 25,
+            bottom: 20,
           },
         },
         legend: {
           display: true,
           position: 'bottom',
           labels: {
-            color: '#374151',
-            padding: 25,
+            padding: 20,
             usePointStyle: true,
-            pointStyle: 'rectRounded',
             font: {
-              size: 14,
-              family: 'Arial, Helvetica, sans-serif',
+              size: 13,
               weight: 'bold',
             },
           },
@@ -176,17 +156,10 @@ function createBarChartConfig(stats, periodLabel) {
             display: false,
           },
           ticks: {
-            color: '#374151',
             font: {
-              size: 13,
-              family: 'Arial, Helvetica, sans-serif',
+              size: 12,
               weight: 'bold',
             },
-            maxRotation: 0,
-            minRotation: 0,
-          },
-          border: {
-            color: '#e5e7eb',
           },
         },
         y: {
@@ -195,28 +168,18 @@ function createBarChartConfig(stats, periodLabel) {
           title: {
             display: true,
             text: 'Hours',
-            color: '#374151',
             font: {
-              size: 14,
-              family: 'Arial, Helvetica, sans-serif',
+              size: 13,
               weight: 'bold',
             },
           },
           ticks: {
-            color: '#374151',
             font: {
-              size: 12,
-              family: 'Arial, Helvetica, sans-serif',
+              size: 11,
             },
             callback: function(value) {
               return value + 'h';
             },
-          },
-          grid: {
-            color: '#f3f4f6',
-          },
-          border: {
-            color: '#e5e7eb',
           },
         },
       },
@@ -234,7 +197,7 @@ function createPieChartConfig(stats, periodLabel, chartType) {
   const backgroundColors = categories.map(cat => COLORS[cat].background);
   const borderColors = categories.map(cat => COLORS[cat].border);
   
-  // Filter out zero values and include hours in labels
+  // Filter out zero values
   const filteredData = [];
   const filteredLabels = [];
   const filteredBgColors = [];
@@ -243,7 +206,6 @@ function createPieChartConfig(stats, periodLabel, chartType) {
   for (let i = 0; i < data.length; i++) {
     if (data[i] > 0) {
       filteredData.push(data[i]);
-      // Include hours in the label
       filteredLabels.push(`${labels[i]} (${data[i]}h)`);
       filteredBgColors.push(backgroundColors[i]);
       filteredBorderColors.push(borderColors[i]);
@@ -262,45 +224,41 @@ function createPieChartConfig(stats, periodLabel, chartType) {
       }],
     },
     options: {
-      responsive: false,
-      animation: false,
-      maintainAspectRatio: false,
-      layout: {
-        padding: {
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: 20,
-        },
-      },
       plugins: {
         title: {
           display: true,
           text: `Time Distribution - ${periodLabel}`,
-          color: '#1f2937',
           font: {
-            size: 20,
+            size: 18,
             weight: 'bold',
-            family: 'Arial, Helvetica, sans-serif',
           },
           padding: {
-            top: 10,
-            bottom: 25,
+            bottom: 20,
           },
         },
         legend: {
           display: true,
           position: 'bottom',
           labels: {
-            color: '#374151',
-            padding: 25,
+            padding: 20,
             usePointStyle: true,
-            pointStyle: 'circle',
             font: {
               size: 14,
-              family: 'Arial, Helvetica, sans-serif',
               weight: 'bold',
             },
+          },
+        },
+        datalabels: {
+          display: true,
+          color: '#fff',
+          font: {
+            weight: 'bold',
+            size: 14,
+          },
+          formatter: (value, ctx) => {
+            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+            const percentage = Math.round((value / total) * 100);
+            return percentage + '%';
           },
         },
       },
