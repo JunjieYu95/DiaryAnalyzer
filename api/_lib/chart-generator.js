@@ -37,15 +37,20 @@ const CATEGORY_LABELS = {
 export async function generateTimeStatsChart(stats, periodLabel, chartType = 'bar') {
   try {
     // Dynamic imports for serverless environment
-    const { createCanvas } = await import('@napi-rs/canvas');
+    const { createCanvas, GlobalFonts } = await import('@napi-rs/canvas');
     const { Chart, registerables } = await import('chart.js');
     
     // Register all Chart.js components
     Chart.register(...registerables);
     
-    // Create canvas
-    const width = 800;
-    const height = chartType === 'bar' ? 400 : 500;
+    // Set default font for Chart.js (use system fonts available in serverless)
+    Chart.defaults.font.family = 'Arial, Helvetica, sans-serif';
+    Chart.defaults.font.size = 12;
+    Chart.defaults.color = '#374151';
+    
+    // Create canvas with larger size for better quality
+    const width = 900;
+    const height = chartType === 'bar' ? 500 : 550;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
     
@@ -85,7 +90,13 @@ function createBarChartConfig(stats, periodLabel) {
     new Date(a.date) - new Date(b.date)
   );
   
-  const labels = dailyData.map(d => d.displayDate);
+  // Format labels to show day name and date clearly
+  const labels = dailyData.map(d => {
+    const date = new Date(d.date);
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+    const monthDay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `${dayName} ${monthDay}`;
+  });
   
   return {
     type: 'bar',
@@ -97,46 +108,64 @@ function createBarChartConfig(stats, periodLabel) {
           data: dailyData.map(d => Math.round(d.prod / 60 * 10) / 10), // Convert to hours
           backgroundColor: COLORS.prod.background,
           borderColor: COLORS.prod.border,
-          borderWidth: 1,
+          borderWidth: 2,
         },
         {
           label: CATEGORY_LABELS.admin,
           data: dailyData.map(d => Math.round(d.admin / 60 * 10) / 10),
           backgroundColor: COLORS.admin.background,
           borderColor: COLORS.admin.border,
-          borderWidth: 1,
+          borderWidth: 2,
         },
         {
           label: CATEGORY_LABELS.nonprod,
           data: dailyData.map(d => Math.round(d.nonprod / 60 * 10) / 10),
           backgroundColor: COLORS.nonprod.background,
           borderColor: COLORS.nonprod.border,
-          borderWidth: 1,
+          borderWidth: 2,
         },
       ],
     },
     options: {
       responsive: false,
       animation: false,
+      maintainAspectRatio: false,
+      layout: {
+        padding: {
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: 20,
+        },
+      },
       plugins: {
         title: {
           display: true,
           text: `Time Distribution - ${periodLabel}`,
+          color: '#1f2937',
           font: {
-            size: 18,
+            size: 20,
             weight: 'bold',
+            family: 'Arial, Helvetica, sans-serif',
           },
           padding: {
             top: 10,
-            bottom: 20,
+            bottom: 25,
           },
         },
         legend: {
           display: true,
           position: 'bottom',
           labels: {
-            padding: 20,
+            color: '#374151',
+            padding: 25,
             usePointStyle: true,
+            pointStyle: 'rectRounded',
+            font: {
+              size: 14,
+              family: 'Arial, Helvetica, sans-serif',
+              weight: 'bold',
+            },
           },
         },
       },
@@ -146,6 +175,19 @@ function createBarChartConfig(stats, periodLabel) {
           grid: {
             display: false,
           },
+          ticks: {
+            color: '#374151',
+            font: {
+              size: 13,
+              family: 'Arial, Helvetica, sans-serif',
+              weight: 'bold',
+            },
+            maxRotation: 0,
+            minRotation: 0,
+          },
+          border: {
+            color: '#e5e7eb',
+          },
         },
         y: {
           stacked: true,
@@ -153,14 +195,28 @@ function createBarChartConfig(stats, periodLabel) {
           title: {
             display: true,
             text: 'Hours',
+            color: '#374151',
             font: {
               size: 14,
+              family: 'Arial, Helvetica, sans-serif',
+              weight: 'bold',
             },
           },
           ticks: {
+            color: '#374151',
+            font: {
+              size: 12,
+              family: 'Arial, Helvetica, sans-serif',
+            },
             callback: function(value) {
               return value + 'h';
             },
+          },
+          grid: {
+            color: '#f3f4f6',
+          },
+          border: {
+            color: '#e5e7eb',
           },
         },
       },
@@ -178,7 +234,7 @@ function createPieChartConfig(stats, periodLabel, chartType) {
   const backgroundColors = categories.map(cat => COLORS[cat].background);
   const borderColors = categories.map(cat => COLORS[cat].border);
   
-  // Filter out zero values
+  // Filter out zero values and include hours in labels
   const filteredData = [];
   const filteredLabels = [];
   const filteredBgColors = [];
@@ -187,7 +243,8 @@ function createPieChartConfig(stats, periodLabel, chartType) {
   for (let i = 0; i < data.length; i++) {
     if (data[i] > 0) {
       filteredData.push(data[i]);
-      filteredLabels.push(labels[i]);
+      // Include hours in the label
+      filteredLabels.push(`${labels[i]} (${data[i]}h)`);
       filteredBgColors.push(backgroundColors[i]);
       filteredBorderColors.push(borderColors[i]);
     }
@@ -201,33 +258,48 @@ function createPieChartConfig(stats, periodLabel, chartType) {
         data: filteredData,
         backgroundColor: filteredBgColors,
         borderColor: filteredBorderColors,
-        borderWidth: 2,
+        borderWidth: 3,
       }],
     },
     options: {
       responsive: false,
       animation: false,
+      maintainAspectRatio: false,
+      layout: {
+        padding: {
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: 20,
+        },
+      },
       plugins: {
         title: {
           display: true,
           text: `Time Distribution - ${periodLabel}`,
+          color: '#1f2937',
           font: {
-            size: 18,
+            size: 20,
             weight: 'bold',
+            family: 'Arial, Helvetica, sans-serif',
           },
           padding: {
             top: 10,
-            bottom: 20,
+            bottom: 25,
           },
         },
         legend: {
           display: true,
           position: 'bottom',
           labels: {
-            padding: 20,
+            color: '#374151',
+            padding: 25,
             usePointStyle: true,
+            pointStyle: 'circle',
             font: {
               size: 14,
+              family: 'Arial, Helvetica, sans-serif',
+              weight: 'bold',
             },
           },
         },
