@@ -25,6 +25,10 @@
   ],
   "author": "Your Name",
   "license": "MIT",
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.44",
+    "chart.js": "^4.4.0"
+  },
   "devDependencies": {
     "sharp": "^0.32.0"
   },

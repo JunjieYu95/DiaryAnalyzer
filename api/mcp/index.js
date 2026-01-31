@@ -7,6 +7,7 @@
 
 import { createCalendarEvent, getCalendarList, getCalendarEvents, getLastEventEndTime, parseFlexibleTime } from "../_lib/google-auth.js";
 import { sendJson, sendError, parseJsonBody, onlyMethods } from "../_lib/http.js";
+import { generateTimeStatsChart } from "../_lib/chart-generator.js";
 
 // ============================================================================
 // Calendar Category Configuration
@@ -40,7 +41,7 @@ const MCP_TOOLS = [
           type: "string",
           enum: ["prod", "nonprod", "admin"],
           description:
-            "Category for the activity: 'prod' (productive work like coding, meetings, learning), 'nonprod' (leisure, entertainment, social), 'admin' (routine tasks, rest, admin work). Required - infer from title if not explicitly specified.",
+            "Category for the activity: 'prod' (productive work like coding, meetings, learning, exercise), 'admin' (regular life activities including leisure, entertainment, meals, rest, chores - this is normal!), 'nonprod' (ONLY when user explicitly expresses regret/negativity like 'wasted time', 'damn', 'ugh'). Required - infer from title and sentiment.",
         },
         description: {
           type: "string",
@@ -148,6 +149,49 @@ const MCP_TOOLS = [
       destructiveHint: false,
     },
   },
+  {
+    name: "diary.getTimeStats",
+    description: "Get time spent statistics by category (prod, nonprod, admin) for a date range. Returns a visual chart showing time distribution and a summary. Perfect for questions like 'how did I spend my time this week?' or 'show me my productivity stats'.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        period: {
+          type: "string",
+          enum: ["today", "yesterday", "this_week", "last_week", "this_month", "last_month", "custom"],
+          description: "Predefined time period. Use 'custom' with from/to for specific dates. Defaults to 'this_week'.",
+          default: "this_week",
+        },
+        from: {
+          type: "string",
+          description: "Start date for custom range (YYYY-MM-DD). Only used when period is 'custom'.",
+        },
+        to: {
+          type: "string",
+          description: "End date for custom range (YYYY-MM-DD). Only used when period is 'custom'.",
+        },
+        chartType: {
+          type: "string",
+          enum: ["bar", "pie", "doughnut"],
+          description: "Type of chart to generate. Defaults to 'bar' for multi-day periods, 'doughnut' for single day.",
+          default: "bar",
+        },
+        includeChart: {
+          type: "boolean",
+          description: "Whether to include a visual chart image in the response. Defaults to true.",
+          default: true,
+        },
+        timeZone: {
+          type: "string",
+          description: "Timezone for the query. Defaults to America/Denver.",
+          default: "America/Denver",
+        },
+      },
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+    },
+  },
 ];
 
 // Tool scope requirements
@@ -156,6 +200,7 @@ const TOOL_SCOPES = {
   "diary.logHighlight": ["diary:write"],
   "diary.listCalendars": ["diary:read"],
   "diary.queryEvents": ["diary:read"],
+  "diary.getTimeStats": ["diary:read"],
 };
 
 // ============================================================================
@@ -464,6 +509,314 @@ async function handleQueryEvents(args, utcOffsetMinutes) {
   };
 }
 
+async function handleGetTimeStats(args, utcOffsetMinutes) {
+  const timeZone = args.timeZone || "America/Denver";
+  const period = args.period || "this_week";
+  const includeChart = args.includeChart !== false;
+  
+  // Calculate date range based on period
+  const { startDate, endDate, periodLabel } = calculateDateRange(period, args.from, args.to, utcOffsetMinutes);
+  
+  // Fetch events from all category calendars
+  const allEvents = await fetchAllCategoryEvents(startDate, endDate, timeZone);
+  
+  // Calculate time stats by category and by day
+  const stats = calculateTimeStats(allEvents, startDate, endDate);
+  
+  // Format the summary text
+  const summaryText = formatStatsSummary(stats, periodLabel);
+  
+  // Build the response content
+  const content = [
+    {
+      type: "text",
+      text: summaryText,
+    },
+  ];
+  
+  // Generate chart if requested
+  if (includeChart && stats.totalMinutes > 0) {
+    try {
+      // Determine chart type based on period
+      let chartType = args.chartType;
+      if (!chartType) {
+        // Single day periods get doughnut, multi-day get bar
+        const isSingleDay = startDate.toDateString() === endDate.toDateString();
+        chartType = isSingleDay ? "doughnut" : "bar";
+      }
+      
+      const chartBase64 = await generateTimeStatsChart(stats, periodLabel, chartType);
+      
+      if (chartBase64) {
+        content.push({
+          type: "image",
+          data: chartBase64,
+          mimeType: "image/png",
+        });
+      }
+    } catch (chartError) {
+      console.error("Failed to generate chart:", chartError);
+      // Continue without chart - don't fail the whole request
+    }
+  }
+  
+  return {
+    content,
+    structuredContent: {
+      success: true,
+      period: periodLabel,
+      startDate: startDate.toISOString().split("T")[0],
+      endDate: endDate.toISOString().split("T")[0],
+      stats: {
+        totalMinutes: stats.totalMinutes,
+        totalHours: Math.round(stats.totalMinutes / 60 * 10) / 10,
+        categories: {
+          prod: {
+            minutes: stats.prod,
+            hours: Math.round(stats.prod / 60 * 10) / 10,
+            percentage: stats.totalMinutes > 0 ? Math.round(stats.prod / stats.totalMinutes * 100) : 0,
+          },
+          nonprod: {
+            minutes: stats.nonprod,
+            hours: Math.round(stats.nonprod / 60 * 10) / 10,
+            percentage: stats.totalMinutes > 0 ? Math.round(stats.nonprod / stats.totalMinutes * 100) : 0,
+          },
+          admin: {
+            minutes: stats.admin,
+            hours: Math.round(stats.admin / 60 * 10) / 10,
+            percentage: stats.totalMinutes > 0 ? Math.round(stats.admin / stats.totalMinutes * 100) : 0,
+          },
+        },
+        dailyBreakdown: stats.dailyBreakdown,
+      },
+    },
+  };
+}
+
+// Calculate date range based on period
+function calculateDateRange(period, fromDate, toDate, utcOffsetMinutes) {
+  const now = new Date();
+  let startDate, endDate, periodLabel;
+  
+  // Adjust for user's timezone
+  if (Number.isFinite(utcOffsetMinutes)) {
+    now.setTime(now.getTime() + utcOffsetMinutes * 60 * 1000);
+  }
+  
+  switch (period) {
+    case "today":
+      startDate = new Date(now);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(now);
+      endDate.setHours(23, 59, 59, 999);
+      periodLabel = "Today";
+      break;
+      
+    case "yesterday":
+      startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - 1);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setHours(23, 59, 59, 999);
+      periodLabel = "Yesterday";
+      break;
+      
+    case "this_week":
+      // Start from Monday
+      startDate = new Date(now);
+      const dayOfWeek = startDate.getDay();
+      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      startDate.setDate(startDate.getDate() + mondayOffset);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(now);
+      endDate.setHours(23, 59, 59, 999);
+      periodLabel = "This Week";
+      break;
+      
+    case "last_week":
+      startDate = new Date(now);
+      const currentDayOfWeek = startDate.getDay();
+      const lastMondayOffset = currentDayOfWeek === 0 ? -13 : -6 - currentDayOfWeek;
+      startDate.setDate(startDate.getDate() + lastMondayOffset);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+      periodLabel = "Last Week";
+      break;
+      
+    case "this_month":
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(now);
+      endDate.setHours(23, 59, 59, 999);
+      periodLabel = "This Month";
+      break;
+      
+    case "last_month":
+      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+      endDate.setHours(23, 59, 59, 999);
+      periodLabel = "Last Month";
+      break;
+      
+    case "custom":
+      if (!fromDate || !toDate) {
+        throw { code: -32602, message: "from and to dates are required for custom period" };
+      }
+      startDate = new Date(fromDate);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(toDate);
+      endDate.setHours(23, 59, 59, 999);
+      periodLabel = `${fromDate} to ${toDate}`;
+      break;
+      
+    default:
+      // Default to this week
+      startDate = new Date(now);
+      const defaultDayOfWeek = startDate.getDay();
+      const defaultMondayOffset = defaultDayOfWeek === 0 ? -6 : 1 - defaultDayOfWeek;
+      startDate.setDate(startDate.getDate() + defaultMondayOffset);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(now);
+      endDate.setHours(23, 59, 59, 999);
+      periodLabel = "This Week";
+  }
+  
+  return { startDate, endDate, periodLabel };
+}
+
+// Fetch events from all category calendars
+async function fetchAllCategoryEvents(startDate, endDate, timeZone) {
+  const calendarList = await getCalendarList();
+  const allEvents = [];
+  
+  // Find all category calendars
+  for (const calendarName of CATEGORY_CALENDARS) {
+    const calendar = calendarList.items?.find(
+      (c) => c.summary === calendarName || c.summary?.toLowerCase() === calendarName.toLowerCase()
+    );
+    
+    if (calendar) {
+      try {
+        const result = await getCalendarEvents({
+          calendarId: calendar.id,
+          timeMin: startDate.toISOString(),
+          timeMax: endDate.toISOString(),
+          maxResults: 500,
+        });
+        
+        // Add calendar name to each event for categorization
+        const events = (result.items || []).map((event) => ({
+          ...event,
+          calendarName: calendar.summary,
+        }));
+        
+        allEvents.push(...events);
+      } catch (err) {
+        console.error(`Error fetching events from ${calendarName}:`, err);
+      }
+    }
+  }
+  
+  return allEvents;
+}
+
+// Calculate time statistics from events
+function calculateTimeStats(events, startDate, endDate) {
+  const stats = {
+    prod: 0,
+    nonprod: 0,
+    admin: 0,
+    totalMinutes: 0,
+    dailyBreakdown: {},
+  };
+  
+  // Initialize daily breakdown
+  const currentDate = new Date(startDate);
+  while (currentDate <= endDate) {
+    const dateKey = currentDate.toISOString().split("T")[0];
+    stats.dailyBreakdown[dateKey] = {
+      date: dateKey,
+      displayDate: currentDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
+      prod: 0,
+      nonprod: 0,
+      admin: 0,
+      total: 0,
+    };
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+  
+  // Process each event
+  events.forEach((event) => {
+    if (!event.start?.dateTime || !event.end?.dateTime) return;
+    
+    const eventStart = new Date(event.start.dateTime);
+    const eventEnd = new Date(event.end.dateTime);
+    const duration = (eventEnd - eventStart) / (1000 * 60); // minutes
+    
+    if (duration <= 0) return;
+    
+    // Determine category from calendar name
+    const calendarName = event.calendarName?.toLowerCase() || "";
+    let category = "admin";
+    if (calendarName.includes("prod") && !calendarName.includes("nonprod")) {
+      category = "prod";
+    } else if (calendarName.includes("nonprod")) {
+      category = "nonprod";
+    }
+    
+    // Add to totals
+    stats[category] += duration;
+    stats.totalMinutes += duration;
+    
+    // Add to daily breakdown
+    const dateKey = eventStart.toISOString().split("T")[0];
+    if (stats.dailyBreakdown[dateKey]) {
+      stats.dailyBreakdown[dateKey][category] += duration;
+      stats.dailyBreakdown[dateKey].total += duration;
+    }
+  });
+  
+  return stats;
+}
+
+// Format statistics summary text
+function formatStatsSummary(stats, periodLabel) {
+  const formatTime = (minutes) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = Math.floor(minutes % 60);
+    if (hours > 0 && mins > 0) return `${hours}h ${mins}m`;
+    if (hours > 0) return `${hours}h`;
+    return `${mins}m`;
+  };
+  
+  const formatPercentage = (minutes) => {
+    if (stats.totalMinutes === 0) return "0%";
+    return `${Math.round((minutes / stats.totalMinutes) * 100)}%`;
+  };
+  
+  if (stats.totalMinutes === 0) {
+    return `📊 Time Stats for ${periodLabel}\n\nNo tracked activities found for this period.`;
+  }
+  
+  let summary = `📊 Time Stats for ${periodLabel}\n\n`;
+  summary += `Total tracked time: ${formatTime(stats.totalMinutes)}\n\n`;
+  
+  if (stats.prod > 0) {
+    summary += `✅ Productive: ${formatTime(stats.prod)} (${formatPercentage(stats.prod)})\n`;
+  }
+  if (stats.admin > 0) {
+    summary += `🔄 Admin/Rest: ${formatTime(stats.admin)} (${formatPercentage(stats.admin)})\n`;
+  }
+  if (stats.nonprod > 0) {
+    summary += `⚠️ Non-productive: ${formatTime(stats.nonprod)} (${formatPercentage(stats.nonprod)})\n`;
+  }
+  
+  return summary;
+}
+
 // ============================================================================
 // MCP JSON-RPC Handler
 // ============================================================================
@@ -554,6 +907,9 @@ async function handleMCPRequest(body, headers) {
             break;
           case "diary.queryEvents":
             result = await handleQueryEvents(args || {}, utcOffsetMinutes);
+            break;
+          case "diary.getTimeStats":
+            result = await handleGetTimeStats(args || {}, utcOffsetMinutes);
             break;
           default:
             return jsonRpcError(id, -32003, `Tool not implemented: ${name}`);
