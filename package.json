@@ -12,7 +12,8 @@
     "test": "echo 'No tests specified' && exit 0",
     "lint": "echo 'No linting configured' && exit 0",
     "clean": "echo 'No cleanup required for static web app'",
-    "setup:auth": "node scripts/get-refresh-token.js"
+    "setup:auth": "node scripts/get-refresh-token.js",
+    "test:time-stats": "node scripts/test-time-stats.js"
   },
   "keywords": [
     "web-app",
@@ -25,6 +26,10 @@
   ],
   "author": "Your Name",
   "license": "MIT",
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.44",
+    "chart.js": "^4.4.0"
+  },
   "devDependencies": {
     "sharp": "^0.32.0"
   },
