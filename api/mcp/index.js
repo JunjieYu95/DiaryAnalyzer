@@ -155,14 +155,26 @@ Creates an all-day event with an emoji prefix based on type.`,
 - See what activities they logged on a specific day
 - Review their diary entries for a date range
 - Check what they did yesterday/last week
+- List detailed activities (not just statistics)
 
-Examples: "What did I do yesterday?", "Show my activities from last Monday", "What have I logged this week?"`,
+DATE MAPPING - Calculate the actual date for queries like:
+- "yesterday" → calculate yesterday's date in YYYY-MM-DD
+- "last Monday", "last Wednesday" → calculate that day's date
+- "January 15th" → "2026-01-15"
+
+Examples:
+- "What did I do yesterday?" → date: (yesterday's YYYY-MM-DD)
+- "Show my activities from last Monday" → date: (last Monday's YYYY-MM-DD)
+- "What have I logged this week?" → from: (Monday's date), to: (today's date)
+- "List my activities for January 20th" → date: "2026-01-20"
+
+For TIME STATISTICS with charts, use diary.getTimeStats instead.`,
     inputSchema: {
       type: "object",
       properties: {
         date: {
           type: "string",
-          description: "Single date to query in YYYY-MM-DD format. Defaults to today.",
+          description: "Single date to query in YYYY-MM-DD format. Calculate the actual date for queries like 'yesterday', 'last Wednesday', etc. Defaults to today.",
         },
         from: {
           type: "string",
@@ -174,7 +186,17 @@ Examples: "What did I do yesterday?", "Show my activities from last Monday", "Wh
         },
         calendar: {
           type: "string",
-          description: "Specific calendar name to query. Defaults to primary.",
+          description: "Specific calendar name to query. If not specified, queries all diary category calendars (prod, nonprod, admin).",
+        },
+        includeChart: {
+          type: "boolean",
+          description: "Whether to include a visual time breakdown chart. Defaults to false.",
+          default: false,
+        },
+        chartType: {
+          type: "string",
+          enum: ["bar", "pie", "doughnut"],
+          description: "Chart type when includeChart is true. Defaults to 'doughnut' for single day, 'bar' for ranges.",
         },
       },
     },
@@ -194,7 +216,24 @@ Examples: "What did I do yesterday?", "Show my activities from last Monday", "Wh
 - View time distribution by category
 - Analyze their time usage patterns
 
-Examples: "How did I spend my time this week?", "Show me my productivity stats", "What's my time breakdown for last week?", "How much productive time did I have today?"
+PERIOD MAPPING - Use the correct period parameter:
+- "today", "how I spent my time today" → period: "today"
+- "yesterday", "how I spent my time yesterday" → period: "yesterday"
+- "this week", "how I spent my time this week" → period: "this_week"
+- "last week", "how I spent my time last week" → period: "last_week"
+- "this month", "how I spent my time this month" → period: "this_month"
+- "last month", "how I spent my time last month" → period: "last_month"
+- Specific date like "last Wednesday", "January 15th", "2026-01-20" → use 'date' parameter with YYYY-MM-DD format
+- Custom range like "from Jan 1 to Jan 15" → period: "custom" with from/to parameters
+
+Examples:
+- "How did I spend my time this week?" → period: "this_week"
+- "Show my productivity for last month" → period: "last_month"
+- "What did I do today?" → period: "today"
+- "How productive was I yesterday?" → period: "yesterday"
+- "Time breakdown for last Wednesday" → date: "2026-01-29" (calculate the actual date)
+- "Stats for January 20th" → date: "2026-01-20"
+- "Time stats from Jan 1 to Jan 15" → period: "custom", from: "2026-01-01", to: "2026-01-15"
 
 Returns a text summary AND a visual chart showing time distribution by category (productive, admin/rest, non-productive).`,
     inputSchema: {
@@ -203,8 +242,12 @@ Returns a text summary AND a visual chart showing time distribution by category 
         period: {
           type: "string",
           enum: ["today", "yesterday", "this_week", "last_week", "this_month", "last_month", "custom"],
-          description: "Time period to analyze. Use 'custom' with from/to for specific dates. Defaults to 'this_week'.",
+          description: "Time period to analyze. Use 'custom' with from/to for date ranges. Ignored if 'date' is provided. Defaults to 'this_week'.",
           default: "this_week",
+        },
+        date: {
+          type: "string",
+          description: "Specific date to analyze in YYYY-MM-DD format. Use for queries like 'last Wednesday', 'January 15th'. When provided, overrides 'period' parameter.",
         },
         from: {
           type: "string",
@@ -755,44 +798,173 @@ async function handleListCalendars() {
 async function handleQueryEvents(args, utcOffsetMinutes) {
   const today = getTodayDate(utcOffsetMinutes);
   let timeMin, timeMax;
+  let queryDate = args.date;
+  let queryFrom = args.from;
+  let queryTo = args.to;
 
-  if (args.date) {
-    timeMin = `${args.date}T00:00:00Z`;
-    timeMax = `${args.date}T23:59:59Z`;
-  } else if (args.from && args.to) {
-    timeMin = `${args.from}T00:00:00Z`;
-    timeMax = `${args.to}T23:59:59Z`;
+  if (queryDate) {
+    timeMin = `${queryDate}T00:00:00Z`;
+    timeMax = `${queryDate}T23:59:59Z`;
+  } else if (queryFrom && queryTo) {
+    timeMin = `${queryFrom}T00:00:00Z`;
+    timeMax = `${queryTo}T23:59:59Z`;
   } else {
+    queryDate = today;
     timeMin = `${today}T00:00:00Z`;
     timeMax = `${today}T23:59:59Z`;
   }
 
-  const options = {
-    calendarId: args.calendar || "primary",
-    timeMin,
-    timeMax,
-  };
+  let allEvents = [];
+  const includeChart = args.includeChart === true;
+  const timeZone = args.timeZone || "America/Denver";
 
-  const result = await getCalendarEvents(options);
-  const events = (result.items || []).map((event) => ({
+  // If a specific calendar is provided, query just that one
+  // Otherwise, query all diary category calendars
+  if (args.calendar) {
+    const options = {
+      calendarId: args.calendar,
+      timeMin,
+      timeMax,
+    };
+    const result = await getCalendarEvents(options);
+    allEvents = (result.items || []).map((event) => ({
+      id: event.id,
+      title: event.summary,
+      start: event.start?.dateTime || event.start?.date,
+      end: event.end?.dateTime || event.end?.date,
+      description: event.description,
+      calendarName: args.calendar,
+    }));
+  } else {
+    // Query all category calendars for comprehensive results
+    const calendarList = await getCalendarList();
+
+    for (const calendarName of CATEGORY_CALENDARS) {
+      const calendar = calendarList.items?.find(
+        (c) => c.summary === calendarName || c.summary?.toLowerCase() === calendarName.toLowerCase()
+      );
+
+      if (calendar) {
+        try {
+          const result = await getCalendarEvents({
+            calendarId: calendar.id,
+            timeMin,
+            timeMax,
+            maxResults: 500,
+          });
+
+          const events = (result.items || []).map((event) => ({
+            id: event.id,
+            title: event.summary,
+            start: event.start?.dateTime || event.start?.date,
+            end: event.end?.dateTime || event.end?.date,
+            description: event.description,
+            calendarName: calendar.summary,
+            category: calendarName.includes("Prod") && !calendarName.includes("Nonprod") ? "prod" :
+                      calendarName.includes("Nonprod") ? "nonprod" : "admin",
+          }));
+
+          allEvents.push(...events);
+        } catch (err) {
+          console.error(`Error fetching events from ${calendarName}:`, err);
+        }
+      }
+    }
+
+    // Sort events by start time
+    allEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+  }
+
+  // Format events for display
+  const formattedEvents = allEvents.map((event) => ({
     id: event.id,
-    title: event.summary,
-    start: event.start?.dateTime || event.start?.date,
-    end: event.end?.dateTime || event.end?.date,
+    title: event.summary || event.title,
+    start: event.start,
+    end: event.end,
     description: event.description,
+    category: event.category,
   }));
 
+  // Build text summary with event details
+  let textSummary = `Found ${formattedEvents.length} events`;
+  if (queryDate) {
+    textSummary += ` for ${queryDate}`;
+  } else if (queryFrom && queryTo) {
+    textSummary += ` from ${queryFrom} to ${queryTo}`;
+  }
+  textSummary += ":\n\n";
+
+  if (formattedEvents.length > 0) {
+    const categoryEmoji = { prod: "✅", nonprod: "⚠️", admin: "🔄" };
+    formattedEvents.forEach((event) => {
+      const startTime = event.start ? new Date(event.start).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "All day";
+      const endTime = event.end ? new Date(event.end).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "";
+      const timeRange = endTime ? `${startTime} - ${endTime}` : startTime;
+      const emoji = event.category ? categoryEmoji[event.category] || "" : "";
+      textSummary += `${emoji} ${timeRange}: ${event.title || "Untitled"}\n`;
+    });
+  } else {
+    textSummary = `No events found for the specified date(s).`;
+  }
+
+  // Build response content
+  const content = [
+    {
+      type: "text",
+      text: textSummary,
+    },
+  ];
+
+  // Generate chart if requested and we have events
+  if (includeChart && allEvents.length > 0) {
+    try {
+      // Calculate start and end dates for stats
+      const startDate = new Date(queryDate || queryFrom);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(queryDate || queryTo);
+      endDate.setHours(23, 59, 59, 999);
+
+      // Calculate stats from the events
+      const stats = calculateTimeStats(allEvents, startDate, endDate);
+
+      if (stats.totalMinutes > 0) {
+        // Determine chart type
+        let chartType = args.chartType;
+        if (!chartType) {
+          const isSingleDay = !queryFrom || queryFrom === queryTo || queryDate;
+          chartType = isSingleDay ? "doughnut" : "bar";
+        }
+
+        // Generate period label
+        let periodLabel;
+        if (queryDate) {
+          periodLabel = new Date(queryDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+        } else {
+          periodLabel = `${queryFrom} to ${queryTo}`;
+        }
+
+        const chartBase64 = await generateTimeStatsChart(stats, periodLabel, chartType);
+
+        if (chartBase64) {
+          content.push({
+            type: "image",
+            data: chartBase64,
+            mimeType: "image/png",
+          });
+        }
+      }
+    } catch (chartError) {
+      console.error("Failed to generate chart:", chartError);
+      // Continue without chart
+    }
+  }
+
   return {
-    content: [
-      {
-        type: "text",
-        text: `Found ${events.length} events for the specified date(s).`,
-      },
-    ],
+    content,
     structuredContent: {
       success: true,
-      count: events.length,
-      events,
+      count: formattedEvents.length,
+      events: formattedEvents,
     },
   };
 }
@@ -803,11 +975,14 @@ async function handleQueryEvents(args, utcOffsetMinutes) {
 
 async function handleGetTimeStats(args, utcOffsetMinutes) {
   const timeZone = args.timeZone || "America/Denver";
-  const period = args.period || "this_week";
   const includeChart = args.includeChart !== false;
-  
-  // Calculate date range based on period
-  const { startDate, endDate, periodLabel } = calculateDateRange(period, args.from, args.to, utcOffsetMinutes);
+
+  // If a specific date is provided, use it instead of period
+  let period = args.period || "this_week";
+  let singleDate = args.date;
+
+  // Calculate date range based on period or specific date
+  const { startDate, endDate, periodLabel } = calculateDateRange(period, args.from, args.to, utcOffsetMinutes, singleDate);
   
   // Fetch events from all category calendars
   const allEvents = await fetchAllCategoryEvents(startDate, endDate, timeZone);
@@ -885,16 +1060,30 @@ async function handleGetTimeStats(args, utcOffsetMinutes) {
   };
 }
 
-// Calculate date range based on period
-function calculateDateRange(period, fromDate, toDate, utcOffsetMinutes) {
+// Calculate date range based on period or specific date
+function calculateDateRange(period, fromDate, toDate, utcOffsetMinutes, singleDate) {
   const now = new Date();
   let startDate, endDate, periodLabel;
-  
+
   // Adjust for user's timezone
   if (Number.isFinite(utcOffsetMinutes)) {
     now.setTime(now.getTime() + utcOffsetMinutes * 60 * 1000);
   }
-  
+
+  // If a specific single date is provided, use it
+  if (singleDate) {
+    startDate = new Date(singleDate);
+    if (isNaN(startDate.getTime())) {
+      throw { code: -32602, message: `Invalid date format: ${singleDate}. Use YYYY-MM-DD format.` };
+    }
+    startDate.setHours(0, 0, 0, 0);
+    endDate = new Date(startDate);
+    endDate.setHours(23, 59, 59, 999);
+    // Format a nice label for the date
+    periodLabel = startDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+    return { startDate, endDate, periodLabel };
+  }
+
   switch (period) {
     case "today":
       startDate = new Date(now);

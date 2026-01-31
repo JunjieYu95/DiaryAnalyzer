@@ -150,12 +150,12 @@ async function testGetTimeStats(period = 'this_week') {
 // Test 3: Test different chart types
 async function testChartTypes() {
   console.log('\n🎨 Test 3: Testing different chart types...');
-  
+
   const chartTypes = ['bar', 'doughnut', 'pie'];
-  
+
   for (const chartType of chartTypes) {
     console.log(`\n   Testing ${chartType} chart...`);
-    
+
     try {
       const result = await mcpRequest('tools/call', {
         name: 'diary.getTimeStats',
@@ -182,12 +182,121 @@ async function testChartTypes() {
   }
 }
 
+// Test 4: Test different periods
+async function testAllPeriods() {
+  console.log('\n📅 Test 4: Testing all time periods...');
+
+  const periods = ['today', 'yesterday', 'this_week', 'last_week', 'this_month', 'last_month'];
+
+  for (const period of periods) {
+    console.log(`\n   Testing period: ${period}...`);
+
+    try {
+      const result = await mcpRequest('tools/call', {
+        name: 'diary.getTimeStats',
+        arguments: {
+          period,
+          includeChart: true,
+        },
+      });
+
+      const textContent = result.content?.find(c => c.type === 'text');
+      const hasImage = result.content?.some(c => c.type === 'image');
+
+      console.log(`   ✅ ${period}: ${result.structuredContent?.stats?.totalHours || 0}h total, chart: ${hasImage ? 'yes' : 'no'}`);
+    } catch (err) {
+      console.log(`   ❌ ${period} Error: ${err.message}`);
+    }
+  }
+}
+
+// Test 5: Test specific date parameter
+async function testSpecificDate() {
+  console.log('\n📌 Test 5: Testing specific date parameter...');
+
+  // Test with yesterday's date
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const dateStr = yesterday.toISOString().split('T')[0];
+
+  console.log(`   Testing date: ${dateStr}...`);
+
+  try {
+    const result = await mcpRequest('tools/call', {
+      name: 'diary.getTimeStats',
+      arguments: {
+        date: dateStr,
+        includeChart: true,
+      },
+    });
+
+    const hasImage = result.content?.some(c => c.type === 'image');
+    console.log(`   ✅ Specific date query successful`);
+    console.log(`      Period label: ${result.structuredContent?.period}`);
+    console.log(`      Total hours: ${result.structuredContent?.stats?.totalHours || 0}h`);
+    console.log(`      Has chart: ${hasImage ? 'yes' : 'no'}`);
+
+    if (hasImage) {
+      const imageContent = result.content.find(c => c.type === 'image');
+      const outputPath = path.join(__dirname, '..', `test-output-specific-date.png`);
+      const buffer = Buffer.from(imageContent.data, 'base64');
+      fs.writeFileSync(outputPath, buffer);
+      console.log(`      Chart saved to: ${outputPath}`);
+    }
+  } catch (err) {
+    console.log(`   ❌ Error: ${err.message}`);
+  }
+}
+
+// Test 6: Test queryEvents with chart
+async function testQueryEventsWithChart() {
+  console.log('\n📋 Test 6: Testing queryEvents with chart...');
+
+  // Test with yesterday's date
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const dateStr = yesterday.toISOString().split('T')[0];
+
+  console.log(`   Testing queryEvents for ${dateStr} with chart...`);
+
+  try {
+    const result = await mcpRequest('tools/call', {
+      name: 'diary.queryEvents',
+      arguments: {
+        date: dateStr,
+        includeChart: true,
+      },
+    });
+
+    const textContent = result.content?.find(c => c.type === 'text');
+    const hasImage = result.content?.some(c => c.type === 'image');
+
+    console.log(`   ✅ queryEvents with chart successful`);
+    console.log(`      Events found: ${result.structuredContent?.count || 0}`);
+    console.log(`      Has chart: ${hasImage ? 'yes' : 'no'}`);
+
+    if (textContent) {
+      console.log(`      Response preview: ${textContent.text.substring(0, 100)}...`);
+    }
+
+    if (hasImage) {
+      const imageContent = result.content.find(c => c.type === 'image');
+      const outputPath = path.join(__dirname, '..', `test-output-query-events.png`);
+      const buffer = Buffer.from(imageContent.data, 'base64');
+      fs.writeFileSync(outputPath, buffer);
+      console.log(`      Chart saved to: ${outputPath}`);
+    }
+  } catch (err) {
+    console.log(`   ❌ Error: ${err.message}`);
+  }
+}
+
 // Main test runner
 async function main() {
   try {
     // Test 1: List tools
     const hasTimeStats = await testListTools();
-    
+
     if (!hasTimeStats) {
       console.log('\n❌ The diary.getTimeStats tool is not available.');
       console.log('   Make sure the DiaryAnalyzer changes are deployed.\n');
@@ -196,7 +305,7 @@ async function main() {
 
     // Test 2: Get time stats for this week
     const { hasImage } = await testGetTimeStats('this_week');
-    
+
     if (!hasImage) {
       console.log('\n⚠️  Chart generation may have failed. Check server logs.');
     }
@@ -204,8 +313,17 @@ async function main() {
     // Test 3: Test different chart types
     await testChartTypes();
 
+    // Test 4: Test all time periods
+    await testAllPeriods();
+
+    // Test 5: Test specific date parameter (new feature)
+    await testSpecificDate();
+
+    // Test 6: Test queryEvents with chart (new feature)
+    await testQueryEventsWithChart();
+
     console.log('\n✅ All tests completed!\n');
-    
+
   } catch (error) {
     console.error('\n❌ Test failed:', error.message);
     console.error('   Full error:', error);
