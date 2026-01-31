@@ -60,7 +60,6 @@ export async function generateTimeStatsChart(stats, periodLabel, chartType = 'ba
         height: chartType === 'bar' ? 450 : 500,
         backgroundColor: 'white',
         format: 'png',
-        encoding: 'base64',
       }),
     });
 
@@ -69,8 +68,10 @@ export async function generateTimeStatsChart(stats, periodLabel, chartType = 'ba
       return null;
     }
 
-    // The response is the base64 string directly
-    const base64 = await response.text();
+    // The response is binary PNG data - convert to base64
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString('base64');
     return base64;
     
   } catch (err) {
