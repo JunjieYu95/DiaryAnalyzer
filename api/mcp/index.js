@@ -8,6 +8,7 @@
 import { createCalendarEvent, getCalendarList, getCalendarEvents, getLastEventEndTime, parseFlexibleTime, getAccessToken } from "../_lib/google-auth.js";
 import { sendJson, sendError, parseJsonBody, onlyMethods } from "../_lib/http.js";
 import { generateTimeStatsChart } from "../_lib/chart-generator.js";
+import { routeRequest, parseLogMessage, isLogRequest } from "../_lib/message-parser.js";
 
 // ============================================================================
 // Calendar Category Configuration
@@ -282,6 +283,50 @@ Returns a text summary AND a visual chart showing time distribution by category 
       openWorldHint: false,
     },
   },
+  {
+    name: "diary.processMessage",
+    description: `PROCESS NATURAL LANGUAGE MESSAGE with two-tier routing (pattern-based first, then LLM).
+
+This tool accepts natural language messages and attempts to:
+1. First use pattern-based extraction (no LLM cost)
+2. Fall back to LLM processing only if pattern extraction fails
+
+Examples of messages that can be handled by pattern-based extraction:
+- "log coding from 9am to 11am"
+- "record gym session"
+- "track meeting for 2 hours"
+- "log lunch from 12pm to 1pm"
+
+The tool automatically:
+- Detects action keywords (log, record, track, add)
+- Extracts time patterns (from X to Y, for N hours)
+- Uses default time (last event end to now) if not specified
+- Infers activity category based on keywords
+
+Returns structured data that can be used to call diary.log directly if pattern extraction succeeds.`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        message: {
+          type: "string",
+          description: "The natural language message from the user",
+        },
+        autoExecute: {
+          type: "boolean",
+          description: "If true, automatically execute the log action when pattern extraction succeeds. If false, just return the extracted data. Defaults to true.",
+          default: true,
+        },
+      },
+      required: ["message"],
+    },
+    annotations: {
+      title: "Process Natural Language Message",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
 ];
 
 // Tool scope requirements
@@ -291,6 +336,7 @@ const TOOL_SCOPES = {
   "diary.listCalendars": ["diary:read"],
   "diary.queryEvents": ["diary:read"],
   "diary.getTimeStats": ["diary:read"],
+  "diary.processMessage": ["diary:write"],
 };
 
 // ============================================================================
@@ -1299,6 +1345,148 @@ function formatStatsSummary(stats, periodLabel) {
 }
 
 // ============================================================================
+// Two-Tier Message Processing Handler
+// ============================================================================
+
+/**
+ * Process a natural language message using two-tier routing:
+ * Tier 1: Pattern-based extraction (no LLM cost)
+ * Tier 2: Fall back to LLM processing if pattern extraction fails
+ *
+ * @param {Object} args - Tool arguments
+ * @param {string} args.message - The natural language message
+ * @param {boolean} args.autoExecute - Whether to auto-execute on successful extraction
+ * @param {number} utcOffsetMinutes - User's UTC offset
+ */
+async function handleProcessMessage(args, utcOffsetMinutes) {
+  const { message, autoExecute = true } = args;
+
+  if (!message || typeof message !== 'string' || message.trim().length === 0) {
+    throw {
+      code: -32602,
+      message: "message is required and must be a non-empty string",
+      data: { field: "message", received: message }
+    };
+  }
+
+  const timeZone = "America/Denver"; // Default timezone
+
+  // Get last event end time for default start time calculation
+  let lastEventEndTime = null;
+  try {
+    lastEventEndTime = await getLastEventEndTime(CATEGORY_CALENDARS, timeZone, utcOffsetMinutes);
+  } catch (err) {
+    console.warn("Failed to get last event end time:", err.message);
+  }
+
+  // Route through two-tier system
+  const routingResult = routeRequest(message, {
+    lastEventEndTime,
+    currentTime: new Date(),
+    utcOffsetMinutes: utcOffsetMinutes || 0,
+  });
+
+  // Tier 1: Pattern-based extraction succeeded
+  if (routingResult.tier === 1 && routingResult.success) {
+    const extractedData = routingResult.data;
+
+    // If autoExecute is true and we have sufficient data, create the event
+    if (autoExecute && extractedData.title && extractedData.startTime && extractedData.endTime) {
+      // Check category confidence - if low, still proceed but note it
+      const categoryNote = extractedData.categoryConfidence === 'low'
+        ? ` (category "${extractedData.category}" was inferred with low confidence)`
+        : '';
+
+      try {
+        // Call handleLog directly with extracted data
+        const logResult = await handleLog({
+          title: extractedData.title,
+          category: extractedData.category,
+          startTime: extractedData.startTime,
+          endTime: extractedData.endTime,
+          _allowLowConfidence: true, // Skip confirmation for pattern-based extraction
+        }, utcOffsetMinutes);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `⚡ Pattern-based processing (Tier 1 - no LLM cost):\n${logResult.content[0].text}${categoryNote}`,
+            },
+          ],
+          structuredContent: {
+            success: true,
+            tier: 1,
+            method: "pattern",
+            timeSource: extractedData.timeSource,
+            extractedData,
+            logResult: logResult.structuredContent,
+          },
+        };
+      } catch (logError) {
+        // If logging fails, return the extracted data so user/LLM can retry
+        return {
+          content: [
+            {
+              type: "text",
+              text: `⚡ Pattern extraction succeeded but logging failed: ${logError.message}\n\nExtracted data:\n- Title: ${extractedData.title}\n- Category: ${extractedData.category}\n- Start: ${extractedData.startTime}\n- End: ${extractedData.endTime}`,
+            },
+          ],
+          structuredContent: {
+            success: false,
+            tier: 1,
+            method: "pattern",
+            extractionSucceeded: true,
+            logFailed: true,
+            error: logError.message,
+            extractedData,
+          },
+        };
+      }
+    }
+
+    // Return extracted data without auto-executing
+    return {
+      content: [
+        {
+          type: "text",
+          text: `⚡ Pattern-based extraction succeeded (Tier 1):\n- Title: ${extractedData.title}\n- Category: ${extractedData.category} (confidence: ${extractedData.categoryConfidence})\n- Start: ${extractedData.startTime || 'not specified'}\n- End: ${extractedData.endTime || 'not specified'}\n- Time source: ${extractedData.timeSource}`,
+        },
+      ],
+      structuredContent: {
+        success: true,
+        tier: 1,
+        method: "pattern",
+        autoExecuted: false,
+        extractedData,
+        readyToLog: !!(extractedData.title && extractedData.startTime && extractedData.endTime),
+      },
+    };
+  }
+
+  // Tier 2: Fall back to LLM processing
+  // Return indication that LLM processing is needed
+  return {
+    content: [
+      {
+        type: "text",
+        text: `🔄 Pattern extraction could not fully parse the message. Reason: ${routingResult.reason || 'unknown'}.\n\nLLM processing recommended for: "${message}"\n\n${routingResult.partialData ? `Partial extraction:\n- Title: ${routingResult.partialData.title || 'not found'}\n- Category: ${routingResult.partialData.category || 'not found'}` : 'No partial data extracted.'}`,
+      },
+    ],
+    structuredContent: {
+      success: false,
+      tier: 2,
+      method: "llm_required",
+      reason: routingResult.reason,
+      originalMessage: message,
+      partialData: routingResult.partialData,
+      hint: "Use diary.log tool with appropriate parameters inferred from the message",
+    },
+    needsLLM: true,
+  };
+}
+
+// ============================================================================
 // MCP JSON-RPC Handler
 // ============================================================================
 
@@ -1340,16 +1528,25 @@ async function handleMCPRequest(body, headers) {
         serverInfo: SERVER_INFO,
         instructions: `DIARY ANALYZER - Activity Logging Tools
 
-WHEN TO USE diary.log:
-- User wants to LOG, RECORD, or TRACK an activity
-- User says "I did X", "I spent time on X", "Log that I..."
-- User mentions time periods: "from X to Y", "for N hours"
-- Examples: "Log my coding session", "Record gym workout", "Track meeting with John"
+RECOMMENDED: Use diary.processMessage for natural language input!
+This tool uses two-tier processing:
+- Tier 1: Pattern-based extraction (no LLM cost) for messages like:
+  "log coding from 9am to 11am", "record gym for 1 hour", "track meeting"
+- Tier 2: Falls back to LLM only if pattern extraction fails
+
+WHEN TO USE diary.processMessage (PREFERRED):
+- User sends any natural language about logging/recording activities
+- Let the system automatically extract title, times, and category
+- Examples: "log coding from 9am to 11am", "record my gym session", "track lunch"
+
+WHEN TO USE diary.log (DIRECT):
+- When you have already parsed the user's intent
+- When diary.processMessage indicates LLM processing needed
+- User provides structured information
 
 WHEN TO USE diary.logHighlight:
 - User wants to mark a MILESTONE, ACHIEVEMENT, or MEMORABLE moment
 - User says "Mark this day as...", "Record this achievement"
-- Examples: "Add milestone for finishing project", "Record this highlight"
 
 CATEGORY INFERENCE:
 - prod (productive): work, coding, meetings, studying, exercise
@@ -1408,6 +1605,9 @@ The system auto-infers category from activity titles. Start time defaults to the
             break;
           case "diary.getTimeStats":
             result = await handleGetTimeStats(args || {}, utcOffsetMinutes);
+            break;
+          case "diary.processMessage":
+            result = await handleProcessMessage(args || {}, utcOffsetMinutes);
             break;
           default:
             return jsonRpcError(id, -32003, `Tool not implemented: ${name}`);
@@ -1506,12 +1706,45 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Handle POST for JSON-RPC
+  // Handle POST requests
   try {
     const m = onlyMethods(req, ["GET", "POST", "OPTIONS"]);
     if (m) throw m;
 
     const body = await parseJsonBody(req);
+    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+
+    // Quick message endpoint - simplified API for two-tier routing
+    // POST /api/mcp?quick or POST with { "message": "..." } (no jsonrpc field)
+    if (url.searchParams.has('quick') || (body.message && !body.jsonrpc)) {
+      const headerOffset = req.headers["x-yukie-utc-offset-minutes"];
+      const utcOffsetMinutes = headerOffset !== undefined ? Number(headerOffset) : undefined;
+
+      try {
+        const result = await handleProcessMessage({
+          message: body.message,
+          autoExecute: body.autoExecute !== false, // Default true
+        }, utcOffsetMinutes);
+
+        sendJson(res, 200, {
+          success: result.structuredContent?.success || false,
+          tier: result.structuredContent?.tier || 2,
+          method: result.structuredContent?.method || 'unknown',
+          message: result.content?.[0]?.text || 'No response',
+          data: result.structuredContent,
+          needsLLM: result.needsLLM || false,
+        });
+      } catch (err) {
+        sendJson(res, 400, {
+          success: false,
+          error: err.message || 'Processing failed',
+          code: err.code || -32603,
+        });
+      }
+      return;
+    }
+
+    // Standard JSON-RPC handling
     const result = await handleMCPRequest(body, req.headers);
 
     sendJson(res, result.error ? 400 : 200, result);

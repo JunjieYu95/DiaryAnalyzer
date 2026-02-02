@@ -3948,5 +3948,331 @@ async function saveHighlight(highlightData) {
     }
 }
 
+// ===== QUICK INPUT (NATURAL LANGUAGE LOGGING) =====
+
+/**
+ * Quick Input - Natural language activity logging with two-tier processing
+ * Uses pattern-based extraction first (no LLM cost), falls back to LLM if needed
+ */
+
+// Add Quick Input styles
+const quickInputStyle = document.createElement('style');
+quickInputStyle.textContent = `
+    .quick-input-container {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+        width: 90%;
+        max-width: 600px;
+    }
+
+    .quick-input-bar {
+        display: flex;
+        align-items: center;
+        background: var(--card-bg, #fff);
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        padding: 8px 12px;
+        gap: 8px;
+        border: 1px solid var(--border-color, #e0e0e0);
+    }
+
+    .quick-input-bar input {
+        flex: 1;
+        border: none;
+        background: transparent;
+        font-size: 15px;
+        padding: 10px 8px;
+        outline: none;
+        color: var(--text-primary, #333);
+    }
+
+    .quick-input-bar input::placeholder {
+        color: var(--text-secondary, #888);
+    }
+
+    .quick-input-bar button {
+        background: var(--accent-color, #4CAF50);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 16px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .quick-input-bar button:hover {
+        opacity: 0.9;
+        transform: scale(1.02);
+    }
+
+    .quick-input-bar button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .quick-input-bar button.sending {
+        background: #666;
+    }
+
+    .quick-input-feedback {
+        margin-top: 8px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        font-size: 13px;
+        display: none;
+    }
+
+    .quick-input-feedback.success {
+        display: block;
+        background: rgba(76, 175, 80, 0.1);
+        border: 1px solid rgba(76, 175, 80, 0.3);
+        color: #2e7d32;
+    }
+
+    .quick-input-feedback.error {
+        display: block;
+        background: rgba(244, 67, 54, 0.1);
+        border: 1px solid rgba(244, 67, 54, 0.3);
+        color: #c62828;
+    }
+
+    .quick-input-feedback.info {
+        display: block;
+        background: rgba(33, 150, 243, 0.1);
+        border: 1px solid rgba(33, 150, 243, 0.3);
+        color: #1565c0;
+    }
+
+    .quick-input-tier {
+        font-size: 11px;
+        opacity: 0.8;
+        margin-top: 4px;
+    }
+
+    .quick-input-examples {
+        margin-top: 8px;
+        padding: 10px 14px;
+        background: rgba(0,0,0,0.03);
+        border-radius: 8px;
+        font-size: 12px;
+        color: var(--text-secondary, #666);
+        display: none;
+    }
+
+    .quick-input-bar input:focus + .quick-input-examples,
+    .quick-input-examples:hover {
+        display: block;
+    }
+
+    .quick-input-toggle {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 999;
+        background: var(--accent-color, #4CAF50);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 56px;
+        height: 56px;
+        font-size: 24px;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        transition: all 0.2s;
+    }
+
+    .quick-input-toggle:hover {
+        transform: scale(1.1);
+    }
+
+    .quick-input-container.hidden {
+        display: none;
+    }
+
+    @media (max-width: 600px) {
+        .quick-input-container {
+            width: calc(100% - 20px);
+            bottom: 10px;
+        }
+
+        .quick-input-toggle {
+            bottom: 10px;
+            right: 10px;
+            width: 48px;
+            height: 48px;
+        }
+    }
+`;
+document.head.appendChild(quickInputStyle);
+
+// Create Quick Input UI
+function createQuickInputUI() {
+    // Toggle button
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'quick-input-toggle';
+    toggleBtn.innerHTML = '⚡';
+    toggleBtn.title = 'Quick Log (Natural Language)';
+    toggleBtn.onclick = toggleQuickInput;
+    document.body.appendChild(toggleBtn);
+
+    // Input container
+    const container = document.createElement('div');
+    container.className = 'quick-input-container hidden';
+    container.id = 'quickInputContainer';
+    container.innerHTML = `
+        <div class="quick-input-bar">
+            <input
+                type="text"
+                id="quickInputField"
+                placeholder="Log activity... e.g., 'log coding from 9am to 11am'"
+                autocomplete="off"
+            />
+            <button id="quickInputSend" onclick="sendQuickInput()">
+                <span>Log</span>
+            </button>
+        </div>
+        <div class="quick-input-feedback" id="quickInputFeedback"></div>
+        <div class="quick-input-examples">
+            <strong>Examples:</strong><br>
+            • "log coding from 9am to 11am"<br>
+            • "record gym for 1 hour"<br>
+            • "track meeting" (uses default time: last event to now)
+        </div>
+    `;
+    document.body.appendChild(container);
+
+    // Enter key handler
+    const inputField = document.getElementById('quickInputField');
+    inputField.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendQuickInput();
+        }
+    });
+
+    // Show examples on focus
+    inputField.addEventListener('focus', () => {
+        container.querySelector('.quick-input-examples').style.display = 'block';
+    });
+
+    inputField.addEventListener('blur', () => {
+        setTimeout(() => {
+            container.querySelector('.quick-input-examples').style.display = 'none';
+        }, 200);
+    });
+}
+
+// Toggle Quick Input visibility
+function toggleQuickInput() {
+    const container = document.getElementById('quickInputContainer');
+    if (container) {
+        container.classList.toggle('hidden');
+        if (!container.classList.contains('hidden')) {
+            document.getElementById('quickInputField').focus();
+        }
+    }
+}
+
+// Send message to pattern-based routing endpoint
+async function sendQuickInput() {
+    const inputField = document.getElementById('quickInputField');
+    const sendBtn = document.getElementById('quickInputSend');
+    const feedbackDiv = document.getElementById('quickInputFeedback');
+
+    const message = inputField.value.trim();
+    if (!message) {
+        showQuickInputFeedback('Please enter an activity to log', 'error');
+        return;
+    }
+
+    // Disable input while processing
+    inputField.disabled = true;
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<span>⏳</span>';
+    sendBtn.classList.add('sending');
+
+    try {
+        // Get UTC offset
+        const utcOffset = new Date().getTimezoneOffset(); // In minutes, negative for positive offsets
+
+        const response = await fetch('/api/mcp?quick', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Yukie-UTC-Offset-Minutes': String(-utcOffset), // Convert to standard offset format
+            },
+            body: JSON.stringify({
+                message: message,
+                autoExecute: true,
+            }),
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            const tierInfo = result.tier === 1 ? '⚡ Pattern-based (no LLM cost)' : '🤖 LLM-assisted';
+            showQuickInputFeedback(
+                `${result.message}\n<div class="quick-input-tier">${tierInfo}</div>`,
+                'success'
+            );
+            inputField.value = '';
+
+            // Refresh calendar data to show new event
+            if (typeof loadCalendarData === 'function') {
+                setTimeout(() => loadCalendarData(), 1000);
+            }
+        } else if (result.needsLLM) {
+            // Pattern extraction failed - show what was extracted and suggest using the form
+            showQuickInputFeedback(
+                `Could not fully parse: "${message}"<br>Try the Quick Log form for more control, or rephrase your message.<br><div class="quick-input-tier">💡 Example: "log [activity] from [start] to [end]"</div>`,
+                'info'
+            );
+        } else {
+            showQuickInputFeedback(result.error || result.message || 'Failed to log activity', 'error');
+        }
+    } catch (error) {
+        console.error('Quick input error:', error);
+        showQuickInputFeedback(`Error: ${error.message}`, 'error');
+    } finally {
+        inputField.disabled = false;
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = '<span>Log</span>';
+        sendBtn.classList.remove('sending');
+    }
+}
+
+// Show feedback message
+function showQuickInputFeedback(message, type) {
+    const feedbackDiv = document.getElementById('quickInputFeedback');
+    if (feedbackDiv) {
+        feedbackDiv.innerHTML = message;
+        feedbackDiv.className = `quick-input-feedback ${type}`;
+
+        // Auto-hide success messages
+        if (type === 'success') {
+            setTimeout(() => {
+                feedbackDiv.className = 'quick-input-feedback';
+            }, 5000);
+        }
+    }
+}
+
+// Initialize Quick Input when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', createQuickInputUI);
+} else {
+    createQuickInputUI();
+}
+
 // Make functions globally available
 window.closeDayDetailsModal = closeDayDetailsModal;
+window.toggleQuickInput = toggleQuickInput;
+window.sendQuickInput = sendQuickInput;
