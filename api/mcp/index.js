@@ -848,16 +848,43 @@ async function handleQueryEvents(args, utcOffsetMinutes) {
   let queryFrom = args.from;
   let queryTo = args.to;
 
+  // Get the UTC offset in milliseconds (default to 0 if not provided)
+  const offsetMs = Number.isFinite(utcOffsetMinutes) ? utcOffsetMinutes * 60 * 1000 : 0;
+
+  // Helper function to convert user's local midnight to UTC ISO string
+  function localMidnightToUTC(dateStr) {
+    const parts = dateStr.split('-');
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1; // JS months are 0-indexed
+    const day = parseInt(parts[2], 10);
+    // Create midnight in user's local time (as UTC representation), then convert to actual UTC
+    const localMidnight = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+    const utcTime = new Date(localMidnight.getTime() - offsetMs);
+    return utcTime.toISOString();
+  }
+
+  // Helper function to convert user's local end-of-day to UTC ISO string
+  function localEndOfDayToUTC(dateStr) {
+    const parts = dateStr.split('-');
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1; // JS months are 0-indexed
+    const day = parseInt(parts[2], 10);
+    // Create 23:59:59.999 in user's local time (as UTC representation), then convert to actual UTC
+    const localEndOfDay = new Date(Date.UTC(year, month, day, 23, 59, 59, 999));
+    const utcTime = new Date(localEndOfDay.getTime() - offsetMs);
+    return utcTime.toISOString();
+  }
+
   if (queryDate) {
-    timeMin = `${queryDate}T00:00:00Z`;
-    timeMax = `${queryDate}T23:59:59Z`;
+    timeMin = localMidnightToUTC(queryDate);
+    timeMax = localEndOfDayToUTC(queryDate);
   } else if (queryFrom && queryTo) {
-    timeMin = `${queryFrom}T00:00:00Z`;
-    timeMax = `${queryTo}T23:59:59Z`;
+    timeMin = localMidnightToUTC(queryFrom);
+    timeMax = localEndOfDayToUTC(queryTo);
   } else {
     queryDate = today;
-    timeMin = `${today}T00:00:00Z`;
-    timeMax = `${today}T23:59:59Z`;
+    timeMin = localMidnightToUTC(today);
+    timeMax = localEndOfDayToUTC(today);
   }
 
   let allEvents = [];
@@ -1107,110 +1134,145 @@ async function handleGetTimeStats(args, utcOffsetMinutes) {
 }
 
 // Calculate date range based on period or specific date
+// IMPORTANT: This function calculates time ranges in the USER's local timezone,
+// then converts them to UTC for Google Calendar API queries.
 function calculateDateRange(period, fromDate, toDate, utcOffsetMinutes, singleDate) {
   const now = new Date();
   let startDate, endDate, periodLabel;
 
-  // Adjust for user's timezone
-  if (Number.isFinite(utcOffsetMinutes)) {
-    now.setTime(now.getTime() + utcOffsetMinutes * 60 * 1000);
+  // Get the UTC offset in milliseconds (default to 0 if not provided)
+  const offsetMs = Number.isFinite(utcOffsetMinutes) ? utcOffsetMinutes * 60 * 1000 : 0;
+
+  // Create a "virtual" date that represents the user's local time
+  // by adding the offset to UTC time. We'll use UTC methods on this date.
+  const userLocalNow = new Date(now.getTime() + offsetMs);
+
+  // Helper function to create a Date at user's local midnight, converted back to UTC
+  function createLocalMidnight(year, month, day) {
+    // Create a date at midnight in user's local time (using UTC representation)
+    const localMidnight = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+    // Convert back to actual UTC by subtracting the offset
+    return new Date(localMidnight.getTime() - offsetMs);
+  }
+
+  // Helper function to create a Date at user's local end-of-day, converted back to UTC
+  function createLocalEndOfDay(year, month, day) {
+    // Create a date at 23:59:59.999 in user's local time (using UTC representation)
+    const localEndOfDay = new Date(Date.UTC(year, month, day, 23, 59, 59, 999));
+    // Convert back to actual UTC by subtracting the offset
+    return new Date(localEndOfDay.getTime() - offsetMs);
   }
 
   // If a specific single date is provided, use it
   if (singleDate) {
-    startDate = new Date(singleDate);
-    if (isNaN(startDate.getTime())) {
+    const dateParts = singleDate.split('-');
+    if (dateParts.length !== 3) {
       throw { code: -32602, message: `Invalid date format: ${singleDate}. Use YYYY-MM-DD format.` };
     }
-    startDate.setHours(0, 0, 0, 0);
-    endDate = new Date(startDate);
-    endDate.setHours(23, 59, 59, 999);
+    const year = parseInt(dateParts[0], 10);
+    const month = parseInt(dateParts[1], 10) - 1; // JS months are 0-indexed
+    const day = parseInt(dateParts[2], 10);
+
+    if (isNaN(year) || isNaN(month) || isNaN(day)) {
+      throw { code: -32602, message: `Invalid date format: ${singleDate}. Use YYYY-MM-DD format.` };
+    }
+
+    startDate = createLocalMidnight(year, month, day);
+    endDate = createLocalEndOfDay(year, month, day);
     // Format a nice label for the date
-    periodLabel = startDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+    const labelDate = new Date(Date.UTC(year, month, day));
+    periodLabel = labelDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
     return { startDate, endDate, periodLabel };
   }
 
+  // Get user's current local date components (using UTC methods on the offset-adjusted date)
+  const userYear = userLocalNow.getUTCFullYear();
+  const userMonth = userLocalNow.getUTCMonth();
+  const userDay = userLocalNow.getUTCDate();
+  const userDayOfWeek = userLocalNow.getUTCDay();
+
   switch (period) {
     case "today":
-      startDate = new Date(now);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(now);
-      endDate.setHours(23, 59, 59, 999);
+      startDate = createLocalMidnight(userYear, userMonth, userDay);
+      endDate = createLocalEndOfDay(userYear, userMonth, userDay);
       periodLabel = "Today";
       break;
-      
-    case "yesterday":
-      startDate = new Date(now);
-      startDate.setDate(startDate.getDate() - 1);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(startDate);
-      endDate.setHours(23, 59, 59, 999);
+
+    case "yesterday": {
+      const yesterdayDate = new Date(Date.UTC(userYear, userMonth, userDay - 1));
+      startDate = createLocalMidnight(yesterdayDate.getUTCFullYear(), yesterdayDate.getUTCMonth(), yesterdayDate.getUTCDate());
+      endDate = createLocalEndOfDay(yesterdayDate.getUTCFullYear(), yesterdayDate.getUTCMonth(), yesterdayDate.getUTCDate());
       periodLabel = "Yesterday";
       break;
-      
-    case "this_week":
+    }
+
+    case "this_week": {
       // Start from Monday
-      startDate = new Date(now);
-      const dayOfWeek = startDate.getDay();
-      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      startDate.setDate(startDate.getDate() + mondayOffset);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(now);
-      endDate.setHours(23, 59, 59, 999);
+      const mondayOffset = userDayOfWeek === 0 ? -6 : 1 - userDayOfWeek;
+      const mondayDate = new Date(Date.UTC(userYear, userMonth, userDay + mondayOffset));
+      startDate = createLocalMidnight(mondayDate.getUTCFullYear(), mondayDate.getUTCMonth(), mondayDate.getUTCDate());
+      endDate = createLocalEndOfDay(userYear, userMonth, userDay);
       periodLabel = "This Week";
       break;
-      
-    case "last_week":
-      startDate = new Date(now);
-      const currentDayOfWeek = startDate.getDay();
-      const lastMondayOffset = currentDayOfWeek === 0 ? -13 : -6 - currentDayOfWeek;
-      startDate.setDate(startDate.getDate() + lastMondayOffset);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + 6);
-      endDate.setHours(23, 59, 59, 999);
+    }
+
+    case "last_week": {
+      const lastMondayOffset = userDayOfWeek === 0 ? -13 : -6 - userDayOfWeek;
+      const lastMondayDate = new Date(Date.UTC(userYear, userMonth, userDay + lastMondayOffset));
+      const lastSundayDate = new Date(Date.UTC(lastMondayDate.getUTCFullYear(), lastMondayDate.getUTCMonth(), lastMondayDate.getUTCDate() + 6));
+      startDate = createLocalMidnight(lastMondayDate.getUTCFullYear(), lastMondayDate.getUTCMonth(), lastMondayDate.getUTCDate());
+      endDate = createLocalEndOfDay(lastSundayDate.getUTCFullYear(), lastSundayDate.getUTCMonth(), lastSundayDate.getUTCDate());
       periodLabel = "Last Week";
       break;
-      
+    }
+
     case "this_month":
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(now);
-      endDate.setHours(23, 59, 59, 999);
+      startDate = createLocalMidnight(userYear, userMonth, 1);
+      endDate = createLocalEndOfDay(userYear, userMonth, userDay);
       periodLabel = "This Month";
       break;
-      
-    case "last_month":
-      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(now.getFullYear(), now.getMonth(), 0);
-      endDate.setHours(23, 59, 59, 999);
+
+    case "last_month": {
+      const lastMonthDate = new Date(Date.UTC(userYear, userMonth - 1, 1));
+      const lastDayOfLastMonth = new Date(Date.UTC(userYear, userMonth, 0));
+      startDate = createLocalMidnight(lastMonthDate.getUTCFullYear(), lastMonthDate.getUTCMonth(), 1);
+      endDate = createLocalEndOfDay(lastDayOfLastMonth.getUTCFullYear(), lastDayOfLastMonth.getUTCMonth(), lastDayOfLastMonth.getUTCDate());
       periodLabel = "Last Month";
       break;
-      
-    case "custom":
+    }
+
+    case "custom": {
       if (!fromDate || !toDate) {
         throw { code: -32602, message: "from and to dates are required for custom period" };
       }
-      startDate = new Date(fromDate);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(toDate);
-      endDate.setHours(23, 59, 59, 999);
+      const fromParts = fromDate.split('-');
+      const toParts = toDate.split('-');
+      if (fromParts.length !== 3 || toParts.length !== 3) {
+        throw { code: -32602, message: "Invalid date format. Use YYYY-MM-DD format." };
+      }
+      const fromYear = parseInt(fromParts[0], 10);
+      const fromMonth = parseInt(fromParts[1], 10) - 1;
+      const fromDay = parseInt(fromParts[2], 10);
+      const toYear = parseInt(toParts[0], 10);
+      const toMonth = parseInt(toParts[1], 10) - 1;
+      const toDay = parseInt(toParts[2], 10);
+
+      startDate = createLocalMidnight(fromYear, fromMonth, fromDay);
+      endDate = createLocalEndOfDay(toYear, toMonth, toDay);
       periodLabel = `${fromDate} to ${toDate}`;
       break;
-      
-    default:
+    }
+
+    default: {
       // Default to this week
-      startDate = new Date(now);
-      const defaultDayOfWeek = startDate.getDay();
-      const defaultMondayOffset = defaultDayOfWeek === 0 ? -6 : 1 - defaultDayOfWeek;
-      startDate.setDate(startDate.getDate() + defaultMondayOffset);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(now);
-      endDate.setHours(23, 59, 59, 999);
+      const defaultMondayOffset = userDayOfWeek === 0 ? -6 : 1 - userDayOfWeek;
+      const defaultMondayDate = new Date(Date.UTC(userYear, userMonth, userDay + defaultMondayOffset));
+      startDate = createLocalMidnight(defaultMondayDate.getUTCFullYear(), defaultMondayDate.getUTCMonth(), defaultMondayDate.getUTCDate());
+      endDate = createLocalEndOfDay(userYear, userMonth, userDay);
       periodLabel = "This Week";
+    }
   }
-  
+
   return { startDate, endDate, periodLabel };
 }
 
