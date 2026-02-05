@@ -84,17 +84,12 @@ export async function generateTimeStatsChart(stats, periodLabel, chartType = 'ba
  * Create bar chart configuration for daily breakdown
  */
 function createBarChartConfig(stats, periodLabel) {
-  const dailyData = Object.values(stats.dailyBreakdown).sort((a, b) => 
-    new Date(a.date) - new Date(b.date)
+  const dailyData = Object.values(stats.dailyBreakdown).sort((a, b) =>
+    a.date.localeCompare(b.date)
   );
   
   // Format labels to show day name and date clearly
-  const labels = dailyData.map(d => {
-    const date = new Date(d.date);
-    const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-    const monthDay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    return `${dayName} ${monthDay}`;
-  });
+  const labels = dailyData.map(d => d.displayDate || d.date);
   
   return {
     type: 'bar',

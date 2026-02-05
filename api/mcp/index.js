@@ -560,6 +560,23 @@ function parseDateTime(value, defaultToNow = true) {
   return parsed;
 }
 
+/**
+ * Return YYYY-MM-DD for a Date in the given IANA timeZone.
+ * Uses Intl.DateTimeFormat/formatToParts so it works regardless of server locale.
+ */
+function getLocalDateKey(date, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const y = parts.find(p => p.type === 'year').value;
+  const m = parts.find(p => p.type === 'month').value;
+  const d = parts.find(p => p.type === 'day').value;
+  return `${y}-${m}-${d}`;
+}
+
 // ============================================================================
 // Tool Handlers
 // ============================================================================
@@ -998,7 +1015,7 @@ async function handleQueryEvents(args, utcOffsetMinutes) {
       endDate.setHours(23, 59, 59, 999);
 
       // Calculate stats from the events
-      const stats = calculateTimeStats(allEvents, startDate, endDate);
+      const stats = calculateTimeStats(allEvents, startDate, endDate, timeZone);
 
       if (stats.totalMinutes > 0) {
         // Determine chart type
@@ -1061,7 +1078,7 @@ async function handleGetTimeStats(args, utcOffsetMinutes) {
   const allEvents = await fetchAllCategoryEvents(startDate, endDate, timeZone);
   
   // Calculate time stats by category and by day
-  const stats = calculateTimeStats(allEvents, startDate, endDate);
+  const stats = calculateTimeStats(allEvents, startDate, endDate, timeZone);
   
   // Format the summary text
   const summaryText = formatStatsSummary(stats, periodLabel);
@@ -1313,7 +1330,7 @@ async function fetchAllCategoryEvents(startDate, endDate, timeZone) {
 }
 
 // Calculate time statistics from events
-function calculateTimeStats(events, startDate, endDate) {
+function calculateTimeStats(events, startDate, endDate, timeZone = "America/Denver") {
   const stats = {
     prod: 0,
     nonprod: 0,
@@ -1325,16 +1342,21 @@ function calculateTimeStats(events, startDate, endDate) {
   // Initialize daily breakdown
   const currentDate = new Date(startDate);
   while (currentDate <= endDate) {
-    const dateKey = currentDate.toISOString().split("T")[0];
+    const dateKey = getLocalDateKey(currentDate, timeZone);
     stats.dailyBreakdown[dateKey] = {
       date: dateKey,
-      displayDate: currentDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
+      displayDate: new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      }).format(currentDate),
       prod: 0,
       nonprod: 0,
       admin: 0,
       total: 0,
     };
-    currentDate.setDate(currentDate.getDate() + 1);
+    currentDate.setTime(currentDate.getTime() + 24 * 60 * 60 * 1000);
   }
   
   // Process each event
@@ -1361,7 +1383,7 @@ function calculateTimeStats(events, startDate, endDate) {
     stats.totalMinutes += duration;
     
     // Add to daily breakdown
-    const dateKey = eventStart.toISOString().split("T")[0];
+    const dateKey = getLocalDateKey(eventStart, timeZone);
     if (stats.dailyBreakdown[dateKey]) {
       stats.dailyBreakdown[dateKey][category] += duration;
       stats.dailyBreakdown[dateKey].total += duration;
